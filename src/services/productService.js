@@ -10,7 +10,7 @@ export const getAllServices = async (filters = {}) => {
     const { category, search, limit = 50, offset = 0, sortBy = 'created_at', order = 'desc' } = filters;
 
     let query = supabase
-      .from('products')
+      .from('services')
       .select(`
         *,
         seller:sellers (
@@ -69,7 +69,7 @@ export const getServiceById = async (productId) => {
     }
 
     const { data, error } = await supabase
-      .from('products')
+      .from('services')
       .select(`
         *,
         seller:sellers (

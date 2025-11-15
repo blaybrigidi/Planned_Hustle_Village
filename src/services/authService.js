@@ -16,6 +16,27 @@ export const signup = async ({ email, password, firstName, lastName, phoneNumber
       return { status: 400, msg: error.message, data: null };
     }
 
+    // Create profile entry in profiles table
+    // The profile.id should match auth.users.id
+    if (data.user?.id) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: data.user.id, // Use the same ID as auth.users
+          first_name: firstName || null,
+          last_name: lastName || null,
+          phone: phoneNumber || null,
+          role: role || 'customer',
+          profile_pic: profilePic || null
+        });
+
+      if (profileError) {
+        // If profile creation fails, log it but don't fail the signup
+        // The user can still sign up, profile might be created via trigger
+        console.error("Profile creation error (may be handled by trigger):", profileError);
+      }
+    }
+
     return {
       status: 201,
       msg: "Signup successful. Please verify your email.",
@@ -26,6 +47,7 @@ export const signup = async ({ email, password, firstName, lastName, phoneNumber
     };
 
   } catch (e) {
+    console.error("Signup error:", e);
     return { status: 500, msg: "Signup failed", data: null };
   }
 };
