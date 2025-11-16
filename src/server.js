@@ -6,6 +6,7 @@ import sellerRoutes from './routes/sellerRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import requestRoutes from './routes/requestRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -32,6 +33,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/requests', requestRoutes);
 
 // Error handling middleware (must be last)
 app.use(notFound);

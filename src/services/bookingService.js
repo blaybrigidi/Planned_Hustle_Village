@@ -242,3 +242,44 @@ export const getUserBookings = async (userId, role = 'buyer') => {
   }
 };
 
+export const acceptBooking = async (userId, bookingId) => {
+  try {
+    // Get the booking with service info
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('*, service:services(user_id)')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { status: 404, msg: "Booking not found", data: null };
+    }
+
+    // Verify user is the seller (owns the service)
+    if (booking.service.user_id !== userId) {
+      return { status: 403, msg: "You do not have permission to accept this booking", data: null };
+    }
+
+    // Check if booking is in pending status
+    if (booking.status !== 'pending') {
+      return { status: 400, msg: `Cannot accept booking with status: ${booking.status}`, data: null };
+    }
+
+    // Update booking status to accepted
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ status: 'accepted' })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error) {
+      return { status: 400, msg: error.message, data: null };
+    }
+
+    return { status: 200, msg: "Booking accepted successfully", data };
+  } catch (e) {
+    console.error("acceptBooking error:", e);
+    return { status: 500, msg: "Failed to accept booking", data: null };
+  }
+};

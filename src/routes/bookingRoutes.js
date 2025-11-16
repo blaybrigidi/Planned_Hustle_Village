@@ -27,6 +27,11 @@ router.get('/:bookingId', verifyToken, responseHandler(bookingController.getBook
  * @query   role (buyer or seller, defaults to buyer)
  */
 router.get('/', verifyToken, responseHandler(bookingController.getUserBookings));
-
+/**
+ * @route   PATCH /api/bookings/:bookingId/accept
+ * @desc    Accept a booking (seller only)
+ * @access  Private (seller)
+ */
+router.patch('/:bookingId/accept', verifyToken, responseHandler(bookingController.acceptBooking));
 export default router;
 

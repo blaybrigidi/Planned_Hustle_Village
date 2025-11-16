@@ -108,10 +108,35 @@ const getUserBookings = async (req) => {
     return { status: 500, msg: "Failed to retrieve bookings", data: null };
   }
 };
+const acceptBooking = async (req) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return { status: 401, msg: "Unauthorized: user not found", data: null };
+    }
+
+    const { bookingId } = req.params;
+    if (!bookingId) {
+      return { status: 400, msg: "Booking ID is required", data: null };
+    }
+
+    const result = await bookingService.acceptBooking(userId, bookingId);
+    return {
+      status: result.status,
+      msg: result.msg,
+      data: result.data
+    };
+  } catch (error) {
+    console.error("Accept booking error:", error);
+    return { status: 500, msg: "Failed to accept booking", data: null };
+  }
+};
+
 
 export default {
   bookNow,
   getBookingById,
-  getUserBookings
+  getUserBookings,
+  acceptBooking
 };
 
