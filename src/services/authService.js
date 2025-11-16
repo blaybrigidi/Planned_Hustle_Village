@@ -1,39 +1,38 @@
 import { supabase } from "../config/supabase.js";
 
+import { supabaseAdmin } from "../config/supabase.js";
+
 export const signup = async ({ email, password, firstName, lastName, phoneNumber, profilePic, role }) => {
   try {
     const metadata = { firstName, lastName, phoneNumber, profilePic, role };
 
-    const { data, error } = await supabase.auth.signUp({
+    // Step 1: Create auth user
+    const { data, error } = await supabaseAdmin.auth.signUp({
       email,
       password,
-      options: {
-        data: metadata
-      }
+      options: { data: metadata }
     });
 
     if (error) {
       return { status: 400, msg: error.message, data: null };
     }
 
-    // Create profile entry in profiles table
-    // The profile.id should match auth.users.id
+    // Step 2: Insert profile using service role (bypasses RLS)
     if (data.user?.id) {
-      const { error: profileError } = await supabase
+      const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .insert({
-          id: data.user.id, // Use the same ID as auth.users
+          id: data.user.id,           // match auth.users.id
           first_name: firstName || null,
           last_name: lastName || null,
           phone: phoneNumber || null,
-          role: role || 'customer',
+          role: role || 'buyer',
           profile_pic: profilePic || null
         });
 
       if (profileError) {
-        // If profile creation fails, log it but don't fail the signup
-        // The user can still sign up, profile might be created via trigger
-        console.error("Profile creation error (may be handled by trigger):", profileError);
+        console.error("Profile creation failed:", profileError);
+        // You can still return success because auth user exists
       }
     }
 
