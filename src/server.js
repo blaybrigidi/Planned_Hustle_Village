@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import sellerRoutes from './routes/sellerRoutes.js';
-import productRoutes from './routes/productRoutes.js';
+import serviceRoutes from './routes/servicesRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import requestRoutes from './routes/requestRoutes.js';
@@ -31,7 +31,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/sellers', sellerRoutes);
-app.use('/api/products', productRoutes);
+app.use('/api/services', serviceRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/requests', requestRoutes);
 
