@@ -1,5 +1,5 @@
 import * as authService from "../services/authService.js";
-
+   // controller for signup. What does it do?
 export const signup = async (req) => {
   try {
     const { email, password, firstName, lastName, phoneNumber, profilePic, role } = req.body;
