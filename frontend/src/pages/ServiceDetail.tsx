@@ -12,6 +12,7 @@ import { Star, CheckCircle2, MessageSquare, ChevronLeft, ChevronRight } from "lu
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ServiceCard } from "@/components/services/ServiceCard";
+import { useCategories } from "@/hooks/useCategories";
 
 interface Service {
   id: string;
@@ -40,8 +41,9 @@ interface Review {
   review_text: string | null;
   created_at: string;
   reviewer: {
-    full_name: string;
-    profile_image_url: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    profile_pic: string | null;
   };
 }
 
@@ -49,6 +51,7 @@ const ServiceDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { categories } = useCategories();
   const [service, setService] = useState<Service | null>(null);
   const [seller, setSeller] = useState<Seller | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -97,16 +100,43 @@ const ServiceDetail = () => {
           rating,
           review_text,
           created_at,
-          reviewer:reviewer_id (
-            full_name,
-            profile_image_url
-          )
+          reviewer_id
         `)
         .eq('reviewee_id', serviceData.user_id)
         .order('created_at', { ascending: false });
 
       if (reviewsError) throw reviewsError;
-      setReviews(reviewsData as any || []);
+
+      // Fetch reviewer profiles separately
+      if (reviewsData && reviewsData.length > 0) {
+        const reviewerIds = [...new Set(reviewsData.map(r => r.reviewer_id))];
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, profile_pic')
+          .in('id', reviewerIds);
+
+        const profilesMap: Record<string, any> = {};
+        profilesData?.forEach(profile => {
+          profilesMap[profile.id] = profile;
+        });
+
+        // Map reviews with reviewer data
+        const mappedReviews = reviewsData.map((review: any) => ({
+          id: review.id,
+          rating: review.rating,
+          review_text: review.review_text,
+          created_at: review.created_at,
+          reviewer: profilesMap[review.reviewer_id] || {
+            first_name: null,
+            last_name: null,
+            profile_pic: null,
+          },
+        }));
+
+        setReviews(mappedReviews);
+      } else {
+        setReviews([]);
+      }
 
       // Calculate average rating
       if (reviewsData && reviewsData.length > 0) {
@@ -123,8 +153,6 @@ const ServiceDetail = () => {
         .neq('user_id', serviceData.user_id)
         .limit(4);
 
-      setRelatedServices(relatedData || []);
-
       // Fetch more services from this seller
       const { data: sellerServicesData } = await supabase
         .from('services')
@@ -134,7 +162,99 @@ const ServiceDetail = () => {
         .neq('id', id)
         .limit(4);
 
-      setSellerServices(sellerServicesData || []);
+      // Fetch seller profiles for all related and seller services
+      const allServiceIds = [
+        ...(relatedData || []).map(s => s.id),
+        ...(sellerServicesData || []).map(s => s.id)
+      ];
+      const allSellerIds = [
+        ...new Set([
+          ...(relatedData || []).map(s => s.user_id),
+          ...(sellerServicesData || []).map(s => s.user_id)
+        ])
+      ];
+
+      // Fetch seller profiles
+      const { data: sellerProfiles } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('id', allSellerIds);
+
+      const sellerProfilesMap: Record<string, any> = {};
+      sellerProfiles?.forEach(profile => {
+        sellerProfilesMap[profile.id] = profile;
+      });
+
+      // Fetch reviews for all services to calculate ratings
+      const { data: allReviewsData } = allServiceIds.length > 0
+        ? await supabase
+            .from('reviews')
+            .select('service_id, rating')
+            .in('service_id', allServiceIds)
+        : { data: [] };
+
+      // Calculate ratings per service
+      const serviceRatingsMap: Record<string, { sum: number; count: number; avg: number }> = {};
+      allReviewsData?.forEach((review: any) => {
+        if (!serviceRatingsMap[review.service_id]) {
+          serviceRatingsMap[review.service_id] = { sum: 0, count: 0, avg: 0 };
+        }
+        serviceRatingsMap[review.service_id].count++;
+        serviceRatingsMap[review.service_id].sum += review.rating;
+      });
+
+      // Calculate averages
+      Object.keys(serviceRatingsMap).forEach(serviceId => {
+        const rating = serviceRatingsMap[serviceId];
+        rating.avg = rating.count > 0 ? rating.sum / rating.count : 0;
+      });
+
+      // Map related services with proper props
+      const mappedRelatedServices = (relatedData || []).map((srv: any) => {
+        const sellerProfile = sellerProfilesMap[srv.user_id];
+        const sellerName = sellerProfile
+          ? (sellerProfile.first_name && sellerProfile.last_name
+              ? `${sellerProfile.first_name} ${sellerProfile.last_name}`
+              : sellerProfile.first_name || sellerProfile.last_name || 'Unknown')
+          : 'Unknown';
+        const ratings = serviceRatingsMap[srv.id] || { avg: 0, count: 0 };
+
+        return {
+          id: srv.id,
+          title: srv.title,
+          description: srv.description,
+          price: srv.default_price || 0,
+          pricingType: 'fixed',
+          imageUrls: [],
+          sellerName,
+          sellerVerified: false,
+          averageRating: ratings.avg || null,
+          reviewCount: ratings.count || 0,
+          category: srv.category,
+        };
+      });
+
+      // Map seller services with proper props
+      const mappedSellerServices = (sellerServicesData || []).map((srv: any) => {
+        const ratings = serviceRatingsMap[srv.id] || { avg: 0, count: 0 };
+
+        return {
+          id: srv.id,
+          title: srv.title,
+          description: srv.description,
+          price: srv.default_price || 0,
+          pricingType: 'fixed',
+          imageUrls: [],
+          sellerName: getSellerName(seller),
+          sellerVerified: false,
+          averageRating: ratings.avg || null,
+          reviewCount: ratings.count || 0,
+          category: srv.category,
+        };
+      });
+
+      setRelatedServices(mappedRelatedServices);
+      setSellerServices(mappedSellerServices);
 
       // Check if user can review (has completed booking)
       if (user) {
@@ -169,16 +289,9 @@ const ServiceDetail = () => {
     return seller.first_name || seller.last_name || 'Unknown';
   };
 
-  const getCategoryLabel = (categoryId: string) => {
-    const categories: Record<string, string> = {
-      food_baking: "Food & Baking",
-      design_creative: "Design & Creative",
-      tutoring: "Tutoring & Academics",
-      beauty_hair: "Beauty & Hair",
-      events_music: "Events & Music",
-      tech_dev: "Tech & Development",
-    };
-    return categories[categoryId] || categoryId;
+  const getCategoryLabel = (categorySlug: string) => {
+    const category = categories.find(c => c.slug === categorySlug);
+    return category?.name || categorySlug;
   };
 
   const handleBookNow = () => {
@@ -375,15 +488,19 @@ const ServiceDetail = () => {
                         <div key={review.id} className="border-b pb-6 last:border-b-0">
                           <div className="flex items-start gap-4">
                             <Avatar>
-                              <AvatarImage src={review.reviewer.profile_image_url || undefined} />
+                              <AvatarImage src={review.reviewer.profile_pic || undefined} />
                               <AvatarFallback>
-                                {review.reviewer.full_name?.charAt(0).toUpperCase()}
+                                {((review.reviewer.first_name || review.reviewer.last_name)?.charAt(0) || 'U').toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
                               <div className="flex items-center justify-between mb-2">
                                 <div>
-                                  <p className="font-semibold">{review.reviewer.full_name}</p>
+                                  <p className="font-semibold">
+                                    {review.reviewer.first_name && review.reviewer.last_name
+                                      ? `${review.reviewer.first_name} ${review.reviewer.last_name}`
+                                      : review.reviewer.first_name || review.reviewer.last_name || 'User'}
+                                  </p>
                                   <div className="flex items-center gap-1">
                                     {[...Array(5)].map((_, i) => (
                                       <Star
@@ -491,7 +608,20 @@ const ServiceDetail = () => {
               <h2 className="text-2xl font-bold mb-6">More from this seller</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {sellerServices.map((srv) => (
-                  <ServiceCard key={srv.id} {...srv} id={srv.id} />
+                  <ServiceCard
+                    key={srv.id}
+                    id={srv.id}
+                    title={srv.title}
+                    description={srv.description}
+                    price={srv.price}
+                    pricingType={srv.pricingType}
+                    imageUrls={srv.imageUrls}
+                    sellerName={srv.sellerName}
+                    sellerVerified={srv.sellerVerified}
+                    averageRating={srv.averageRating}
+                    reviewCount={srv.reviewCount}
+                    category={srv.category}
+                  />
                 ))}
               </div>
             </div>
@@ -502,7 +632,20 @@ const ServiceDetail = () => {
               <h2 className="text-2xl font-bold mb-6">Similar services</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {relatedServices.map((srv) => (
-                  <ServiceCard key={srv.id} {...srv} id={srv.id} />
+                  <ServiceCard
+                    key={srv.id}
+                    id={srv.id}
+                    title={srv.title}
+                    description={srv.description}
+                    price={srv.price}
+                    pricingType={srv.pricingType}
+                    imageUrls={srv.imageUrls}
+                    sellerName={srv.sellerName}
+                    sellerVerified={srv.sellerVerified}
+                    averageRating={srv.averageRating}
+                    reviewCount={srv.reviewCount}
+                    category={srv.category}
+                  />
                 ))}
               </div>
             </div>

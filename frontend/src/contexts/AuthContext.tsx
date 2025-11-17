@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         firstName: data.firstName,
         lastName: data.lastName,
         phoneNumber: data.phoneNumber,
-        role: data.role === 'buyer' ? 'customer' : data.role, // Map buyer to customer
+        role: data.role, // Send buyer, seller, or both directly
       }) as any;
 
       if (response.status !== 201) {

@@ -25,9 +25,9 @@ export const useUserType = () => {
           .single();
 
         if (error) throw error;
-        // Map role to userType: 'customer' -> 'buyer', 'seller' -> 'seller', etc.
+        // Use role directly (buyer, seller, or both)
         const role = data?.role || null;
-        setUserType(role === 'customer' ? 'buyer' : role as any);
+        setUserType(role as any);
       } catch (error) {
         console.error('Error fetching user type:', error);
         setUserType(null);

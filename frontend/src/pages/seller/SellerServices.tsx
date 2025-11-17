@@ -32,16 +32,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import api from "@/lib/api";
-
-// Backend-compatible categories
-const CATEGORIES = [
-  { value: 'food_baking', label: 'Food & Baking' },
-  { value: 'design_creative', label: 'Design & Creative' },
-  { value: 'tutoring', label: 'Tutoring' },
-  { value: 'beauty_hair', label: 'Beauty & Hair' },
-  { value: 'events_music', label: 'Events & Music' },
-  { value: 'tech_dev', label: 'Tech & Development' },
-];
+import { useCategories } from "@/hooks/useCategories";
 
 
 interface Service {
@@ -64,6 +55,7 @@ export default function SellerServices() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { categories, loading: categoriesLoading } = useCategories();
   
   // Form state
   const [title, setTitle] = useState('');
@@ -153,9 +145,9 @@ export default function SellerServices() {
     setPortfolio('');
   };
 
-  const formatCategoryLabel = (category: string) => {
-    const cat = CATEGORIES.find(c => c.value === category);
-    return cat ? cat.label : category;
+  const formatCategoryLabel = (categorySlug: string) => {
+    const cat = categories.find(c => c.slug === categorySlug);
+    return cat ? cat.name : categorySlug;
   };
 
   const activeServices = services.filter(s => s.is_active);
@@ -217,14 +209,14 @@ export default function SellerServices() {
 
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
-                    <Select value={category} onValueChange={setCategory} required>
+                    <Select value={category} onValueChange={setCategory} required disabled={categoriesLoading}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
+                        <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {CATEGORIES.map((cat) => (
-                          <SelectItem key={cat.value} value={cat.value}>
-                            {cat.label}
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.slug} value={cat.slug}>
+                            {cat.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

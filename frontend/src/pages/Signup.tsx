@@ -10,15 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ArrowLeft, Link, Upload, X } from 'lucide-react';
-
-const CATEGORIES = [
-  { value: 'food_baking', label: 'Food & Baking' },
-  { value: 'design_creative', label: 'Design & Creative' },
-  { value: 'tutoring', label: 'Tutoring' },
-  { value: 'beauty_hair', label: 'Beauty & Hair' },
-  { value: 'events_music', label: 'Events & Music' },
-  { value: 'tech_dev', label: 'Tech & Development' },
-];
+import { useCategories } from '@/hooks/useCategories';
 
 const Signup = () => {
   // Step 1: Basic info
@@ -47,6 +39,7 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signup } = useAuth();
+  const { categories, loading: categoriesLoading } = useCategories();
   const navigate = useNavigate();
 
   const handleStep1Submit = (e: React.FormEvent) => {
@@ -222,9 +215,6 @@ const Signup = () => {
 
     setLoading(true);
 
-    // Map userType: buyer -> customer, seller -> seller, both -> both
-    const role = userType === 'buyer' ? 'customer' : userType;
-
     // Prepare signup data for backend
     const signupData: any = {
       email,
@@ -232,7 +222,7 @@ const Signup = () => {
       firstName,
       lastName,
       phoneNumber: phoneNumber || undefined,
-      role,
+      role: userType, // Send buyer, seller, or both directly
     };
 
     // Add service data if seller (will be created after email verification)
@@ -428,14 +418,14 @@ const Signup = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="serviceCategory">Category *</Label>
-                  <Select value={serviceCategory} onValueChange={setServiceCategory} required>
+                  <Select value={serviceCategory} onValueChange={setServiceCategory} required disabled={categoriesLoading}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a category" />
+                      <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select a category"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.slug} value={cat.slug}>
+                          {cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

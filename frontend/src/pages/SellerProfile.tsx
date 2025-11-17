@@ -26,8 +26,9 @@ interface Review {
   review_text: string | null;
   created_at: string;
   reviewer: {
-    full_name: string;
-    profile_image_url: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    profile_pic: string | null;
   };
 }
 
@@ -90,17 +91,43 @@ const SellerProfile = () => {
           rating,
           review_text,
           created_at,
-          reviewer:reviewer_id (
-            first_name,
-            last_name,
-            profile_pic
-          )
+          reviewer_id
         `)
         .eq('reviewee_id', id)
         .order('created_at', { ascending: false });
 
       if (reviewsError) throw reviewsError;
-      setReviews(reviewsData as any || []);
+
+      // Fetch reviewer profiles separately
+      if (reviewsData && reviewsData.length > 0) {
+        const reviewerIds = [...new Set(reviewsData.map(r => r.reviewer_id))];
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, profile_pic')
+          .in('id', reviewerIds);
+
+        const profilesMap: Record<string, any> = {};
+        profilesData?.forEach(profile => {
+          profilesMap[profile.id] = profile;
+        });
+
+        // Map reviews with reviewer data
+        const mappedReviews = reviewsData.map((review: any) => ({
+          id: review.id,
+          rating: review.rating,
+          review_text: review.review_text,
+          created_at: review.created_at,
+          reviewer: profilesMap[review.reviewer_id] || {
+            first_name: null,
+            last_name: null,
+            profile_pic: null,
+          },
+        }));
+
+        setReviews(mappedReviews);
+      } else {
+        setReviews([]);
+      }
 
       // Fetch completed orders count (bookings for services owned by this seller)
       const { data: sellerServices } = await supabase

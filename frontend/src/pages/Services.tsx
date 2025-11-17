@@ -14,15 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-
-const categories = [
-  { id: "food_baking", name: "Food & Baking" },
-  { id: "design_creative", name: "Design & Creative" },
-  { id: "tutoring", name: "Tutoring & Academics" },
-  { id: "beauty_hair", name: "Beauty & Hair" },
-  { id: "events_music", name: "Events & Music" },
-  { id: "tech_dev", name: "Tech & Development" },
-];
+import { useCategories } from "@/hooks/useCategories";
 
 interface Service {
   id: string;
@@ -52,6 +44,7 @@ interface Service {
 const Services = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { categories } = useCategories();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
@@ -202,9 +195,9 @@ const Services = () => {
     return `GH₵${price}`;
   };
 
-  const getCategoryLabel = (categoryId: string) => {
-    const category = categories.find(c => c.id === categoryId);
-    return category?.name || categoryId;
+  const getCategoryLabel = (categorySlug: string) => {
+    const category = categories.find(c => c.slug === categorySlug);
+    return category?.name || categorySlug;
   };
 
   return (
@@ -240,7 +233,7 @@ const Services = () => {
                     <SelectContent>
                       <SelectItem value="all">All categories</SelectItem>
                       {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
+                        <SelectItem key={category.slug} value={category.slug}>
                           {category.name}
                         </SelectItem>
                       ))}

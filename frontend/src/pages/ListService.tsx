@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Navbar } from '@/components/landing/Navbar';
+import { useCategories } from '@/hooks/useCategories';
 
 const ListService = () => {
   const [title, setTitle] = useState('');
@@ -22,16 +23,8 @@ const ListService = () => {
   const [portfolio, setPortfolio] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const { categories, loading: categoriesLoading } = useCategories();
   const navigate = useNavigate();
-
-  const categories = [
-    { value: 'food_baking', label: 'Food & Baking' },
-    { value: 'design_creative', label: 'Design & Creative' },
-    { value: 'tutoring', label: 'Tutoring' },
-    { value: 'beauty_hair', label: 'Beauty & Hair' },
-    { value: 'events_music', label: 'Events & Music' },
-    { value: 'tech_dev', label: 'Tech & Development' },
-  ];
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,14 +116,14 @@ const ListService = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="category">Category *</Label>
-                  <Select value={category} onValueChange={setCategory} required>
+                  <Select value={category} onValueChange={setCategory} required disabled={categoriesLoading}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} />
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
+                      <SelectItem key={cat.slug} value={cat.slug}>
+                        {cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
