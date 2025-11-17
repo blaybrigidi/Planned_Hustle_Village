@@ -28,17 +28,25 @@ interface Service {
   id: string;
   title: string;
   description: string;
-  price: number;
-  pricing_type: string;
-  image_urls: string[];
-  sellerId?: string;
-  sellerName?: string;
-  sellerEmail?: string;
+  default_price: number | null;
+  express_price: number | null;
+  default_delivery_time: string | null;
+  express_delivery_time: string | null;
+  category: string;
+  user_id: string;
+  seller?: {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    user_id: string;
+  } | null;
   seller_name?: string;
   seller_verified: boolean;
   average_rating: number | null;
   review_count: number;
-  category: string;
+  // For backward compatibility
+  price?: number;
 }
 
 const Services = () => {
@@ -61,20 +69,42 @@ const Services = () => {
   const fetchServices = async () => {
     setLoading(true);
     try {
-      const response = await api.buyer.getServices();
-      let allServices: Service[] = response.data || [];
+      // Call the correct backend endpoint with filters
+      const response = await api.services.getAll({
+        category: selectedCategory || undefined,
+        search: searchQuery || undefined,
+        limit: 100, // Get more services for client-side filtering/pagination
+        offset: 0,
+        sortBy: sortBy === 'newest' ? 'created_at' : 'created_at',
+        order: sortBy === 'price_low' ? 'asc' : 'desc'
+      }) as any;
+
+      // Backend returns { status, msg, data: { services, count } }
+      if (response.status !== 200) {
+        throw new Error(response.msg || 'Failed to load services');
+      }
+
+      let allServices: Service[] = response.data?.services || [];
+
+      // Map services to include price for backward compatibility
+      allServices = allServices.map(service => ({
+        ...service,
+        price: service.default_price || 0, // Map default_price to price for filtering
+        seller_name: service.seller?.title || 'Unknown Seller',
+        seller_verified: true, // Assume verified if service is verified
+      }));
 
       // Client-side filtering
       let filteredServices = allServices;
 
-      // Filter by category
+      // Filter by category (already done by backend, but keep for client-side filtering)
       if (selectedCategory) {
         filteredServices = filteredServices.filter(s => s.category === selectedCategory);
       }
 
       // Filter by price range
       filteredServices = filteredServices.filter(
-        s => s.price >= priceRange[0] && s.price <= priceRange[1]
+        s => (s.default_price || 0) >= priceRange[0] && (s.default_price || 0) <= priceRange[1]
       );
 
       // Filter by search query
@@ -106,10 +136,10 @@ const Services = () => {
           // Keep default order (already sorted by created_at desc from backend)
           break;
         case 'price_low':
-          filteredServices.sort((a, b) => a.price - b.price);
+          filteredServices.sort((a, b) => (a.default_price || 0) - (b.default_price || 0));
           break;
         case 'price_high':
-          filteredServices.sort((a, b) => b.price - a.price);
+          filteredServices.sort((a, b) => (b.default_price || 0) - (a.default_price || 0));
           break;
       }
 
@@ -119,14 +149,8 @@ const Services = () => {
       const endIndex = startIndex + itemsPerPage;
       const paginatedServices = filteredServices.slice(startIndex, endIndex);
 
-      // Map seller data
-      const mappedServices = paginatedServices.map(service => ({
-        ...service,
-        seller_name: service.sellerName || service.seller_name || 'Unknown',
-        seller_verified: true, // Assume verified for now
-        average_rating: service.average_rating || null,
-        review_count: service.review_count || 0,
-      }));
+      // Services are already mapped with seller data from backend
+      const mappedServices = paginatedServices;
 
       setServices(mappedServices);
       setTotalPages(Math.ceil(filteredServices.length / itemsPerPage));
@@ -173,12 +197,8 @@ const Services = () => {
     setSearchParams(new URLSearchParams());
   };
 
-  const formatPrice = (price: number, pricingType: string) => {
-    if (pricingType === 'hourly') {
-      return `GH₵${price}/hr`;
-    } else if (pricingType === 'custom') {
-      return `From GH₵${price}`;
-    }
+  const formatPrice = (price: number | null) => {
+    if (!price) return 'Price on request';
     return `GH₵${price}`;
   };
 
@@ -335,17 +355,13 @@ const Services = () => {
                     {services.map((service) => (
                       <Card key={service.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                         <div className="relative aspect-video bg-muted">
-                          {service.image_urls && service.image_urls.length > 0 ? (
-                            <img
-                              src={service.image_urls[0]}
-                              alt={service.title}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                              No image
+                          {/* Services don't have images yet, show placeholder */}
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-gradient-to-br from-primary/10 to-primary/5">
+                            <div className="text-center">
+                              <div className="text-4xl mb-2">🎨</div>
+                              <div className="text-xs">Service Image</div>
                             </div>
-                          )}
+                          </div>
                           <Badge variant="category" className="absolute top-3 right-3">
                             {getCategoryLabel(service.category)}
                           </Badge>
@@ -357,9 +373,13 @@ const Services = () => {
                               {service.title}
                             </h3>
                             <span className="text-lg font-bold text-primary whitespace-nowrap">
-                              {formatPrice(service.price, service.pricing_type)}
+                              {formatPrice(service.default_price)}
                             </span>
                           </div>
+
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {service.description}
+                          </p>
 
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">{service.seller_name}</span>
