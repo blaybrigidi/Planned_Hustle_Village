@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Navbar } from '@/components/landing/Navbar';
 import { useCategories } from '@/hooks/useCategories';
+import { Upload, X, Loader2 } from 'lucide-react';
 
 const ListService = () => {
   const [title, setTitle] = useState('');
@@ -21,11 +22,72 @@ const ListService = () => {
   const [expressPrice, setExpressPrice] = useState('');
   const [expressDeliveryTime, setExpressDeliveryTime] = useState('');
   const [portfolio, setPortfolio] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const { categories, loading: categoriesLoading } = useCategories();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleImageUpload = async (files: FileList) => {
+    if (!user) return;
+
+    setUploadingImages(true);
+    const uploadedUrls: string[] = [];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          toast.error(`${file.name} is not an image file`);
+          continue;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`${file.name} is too large. Max size is 5MB`);
+          continue;
+        }
+
+        // Create unique filename
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = fileName;
+
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('service-images')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('service-images')
+          .getPublicUrl(filePath);
+
+        uploadedUrls.push(publicUrl);
+      }
+
+      setImageUrls([...imageUrls, ...uploadedUrls]);
+      toast.success(`${uploadedUrls.length} image(s) uploaded successfully`);
+    } catch (error: any) {
+      console.error('Error uploading images:', error);
+      toast.error(error.message || 'Failed to upload images');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImageUrls(imageUrls.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,30 +105,56 @@ const ListService = () => {
     setLoading(true);
 
     try {
-      // Create service using backend API
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/sellers/create-service`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({
-        title,
-        description,
+      // Try backend API first, but if it fails or doesn't support image_urls, create directly in Supabase
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/sellers/create-service`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            title,
+            description,
+            category,
+            default_price: parseFloat(defaultPrice) || null,
+            default_delivery_time: defaultDeliveryTime || null,
+            express_price: expressPrice ? parseFloat(expressPrice) : null,
+            express_delivery_time: expressDeliveryTime || null,
+            portfolio: portfolio || null,
+            image_urls: imageUrls.length > 0 ? imageUrls : null,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          toast.success('Service listed successfully!');
+          navigate('/my-services');
+          return;
+        }
+      } catch (apiError) {
+        console.log('Backend API not available or doesn\'t support image_urls, creating directly in Supabase');
+      }
+
+      // Fallback: Create directly in Supabase
+      const { error } = await supabase
+        .from('services')
+        .insert({
+          title: title.trim(),
+          description: description.trim(),
           category,
           default_price: parseFloat(defaultPrice) || null,
           default_delivery_time: defaultDeliveryTime || null,
           express_price: expressPrice ? parseFloat(expressPrice) : null,
           express_delivery_time: expressDeliveryTime || null,
-          portfolio: portfolio || null,
-        }),
-      });
+          portfolio: portfolio.trim(),
+          image_urls: imageUrls.length > 0 ? imageUrls : null,
+          user_id: user?.id,
+          is_active: true,
+        });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.msg || 'Failed to create service');
-      }
+      if (error) throw error;
 
       toast.success('Service listed successfully!');
       navigate('/my-services');
@@ -191,6 +279,72 @@ const ListService = () => {
                   rows={4}
                   required
                 />
+              </div>
+
+              {/* Image Upload Section */}
+              <div className="space-y-2">
+                <Label>Service Images</Label>
+                <div className="space-y-4">
+                  {/* Image Preview Grid */}
+                  {imageUrls.length > 0 && (
+                    <div className="grid grid-cols-3 gap-4">
+                      {imageUrls.map((url, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={url}
+                            alt={`Service image ${index + 1}`}
+                            className="w-full h-32 object-cover rounded-md border"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(index)}
+                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Upload Button */}
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleImageUpload(e.target.files);
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImages}
+                    >
+                      {uploadingImages ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          {imageUrls.length > 0 ? 'Add More Images' : 'Upload Images'}
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Upload up to 5 images (Max 5MB each). JPG, PNG, or WebP formats.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-4">

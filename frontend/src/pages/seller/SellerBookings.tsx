@@ -1,4 +1,5 @@
-import { Eye } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, Loader2 } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,43 +13,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
-const bookings = [
-  {
-    id: "BK001",
-    buyer: "John Doe",
-    service: "Web Design",
-    date: "Nov 10, 2025",
-    time: "10:00 AM",
-    status: "new",
-    escrowStatus: "pending",
-    amount: "GH₵ 500",
-  },
-  {
-    id: "BK002",
-    buyer: "Jane Smith",
-    service: "Logo Design",
-    date: "Nov 8, 2025",
-    time: "2:00 PM",
-    status: "in_progress",
-    escrowStatus: "funded",
-    amount: "GH₵ 200",
-  },
-  {
-    id: "BK003",
-    buyer: "Mike Johnson",
-    service: "Consulting",
-    date: "Nov 5, 2025",
-    time: "11:00 AM",
-    status: "completed",
-    escrowStatus: "released",
-    amount: "GH₵ 300",
-  },
-];
+interface Booking {
+  id: string;
+  buyer_id: string;
+  service_id: string;
+  date: string;
+  time: string;
+  status: "pending" | "accepted" | "in_progress" | "completed";
+  created_at: string;
+  buyer?: {
+    first_name: string | null;
+    last_name: string | null;
+  };
+  service?: {
+    title: string;
+    default_price: number | null;
+  };
+}
 
 const getStatusBadge = (status: string) => {
   const variants: Record<string, any> = {
-    new: "default",
+    pending: "default",
+    accepted: "secondary",
     in_progress: "secondary",
     completed: "outline",
     cancelled: "destructive",
@@ -56,16 +47,124 @@ const getStatusBadge = (status: string) => {
   return variants[status] || "default";
 };
 
-const getEscrowBadge = (status: string) => {
-  const colors: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    funded: "bg-green-100 text-green-800",
-    released: "bg-blue-100 text-blue-800",
-  };
-  return colors[status] || "bg-gray-100 text-gray-800";
-};
-
 export default function SellerBookings() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [selectedTab, setSelectedTab] = useState("all");
+
+  useEffect(() => {
+    if (user) {
+      fetchBookings();
+    }
+  }, [user]);
+
+  const fetchBookings = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      // First, get seller's services
+      const { data: services } = await supabase
+        .from('services')
+        .select('id')
+        .eq('user_id', user.id);
+
+      const serviceIds = services?.map(s => s.id) || [];
+
+      if (serviceIds.length === 0) {
+        setBookings([]);
+        return;
+      }
+
+      // Fetch bookings for seller's services
+      const { data: bookingsData, error } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          buyer_id,
+          service_id,
+          date,
+          time,
+          status,
+          created_at
+        `)
+        .in('service_id', serviceIds)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Fetch buyer profiles
+      const buyerIds = [...new Set((bookingsData || []).map(b => b.buyer_id))];
+      const { data: buyers } = buyerIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('id, first_name, last_name')
+            .in('id', buyerIds)
+        : { data: [] };
+
+      const buyersMap: Record<string, any> = {};
+      buyers?.forEach(buyer => {
+        buyersMap[buyer.id] = buyer;
+      });
+
+      // Fetch service details
+      const { data: servicesData } = await supabase
+        .from('services')
+        .select('id, title, default_price')
+        .in('id', serviceIds);
+
+      const servicesMap: Record<string, any> = {};
+      servicesData?.forEach(service => {
+        servicesMap[service.id] = service;
+      });
+
+      // Map bookings with buyer and service info
+      const mappedBookings: Booking[] = (bookingsData || []).map((booking: any) => ({
+        ...booking,
+        buyer: buyersMap[booking.buyer_id],
+        service: servicesMap[booking.service_id],
+      }));
+
+      setBookings(mappedBookings);
+    } catch (error: any) {
+      console.error('Error fetching bookings:', error);
+      toast.error('Failed to load bookings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getBuyerName = (booking: Booking) => {
+    if (booking.buyer?.first_name && booking.buyer?.last_name) {
+      return `${booking.buyer.first_name} ${booking.buyer.last_name}`;
+    }
+    return booking.buyer?.first_name || booking.buyer?.last_name || 'Unknown';
+  };
+
+  const filteredBookings = selectedTab === "all"
+    ? bookings
+    : bookings.filter(b => {
+        if (selectedTab === "new") return b.status === "pending" || b.status === "accepted";
+        return b.status === selectedTab;
+      });
+
+  if (loading) {
+    return (
+      <>
+        <DashboardHeader 
+          title="Bookings" 
+          subtitle="Loading your bookings..."
+        />
+        <div className="p-6 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <DashboardHeader 
@@ -74,87 +173,77 @@ export default function SellerBookings() {
       />
 
       <div className="p-6">
-        <Tabs defaultValue="all" className="space-y-6">
+        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
           <TabsList>
-            <TabsTrigger value="all">All Bookings</TabsTrigger>
-            <TabsTrigger value="new">New Requests</TabsTrigger>
-            <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
+            <TabsTrigger value="all">All Bookings ({bookings.length})</TabsTrigger>
+            <TabsTrigger value="new">New Requests ({bookings.filter(b => b.status === "pending" || b.status === "accepted").length})</TabsTrigger>
+            <TabsTrigger value="in_progress">In Progress ({bookings.filter(b => b.status === "in_progress").length})</TabsTrigger>
+            <TabsTrigger value="completed">Completed ({bookings.filter(b => b.status === "completed").length})</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="all" className="space-y-4">
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Booking ID</TableHead>
-                      <TableHead>Buyer</TableHead>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Escrow</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookings.map((booking) => (
-                      <TableRow key={booking.id}>
-                        <TableCell className="font-medium">{booking.id}</TableCell>
-                        <TableCell>{booking.buyer}</TableCell>
-                        <TableCell>{booking.service}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {booking.date}<br />
-                          <span className="text-xs">{booking.time}</span>
-                        </TableCell>
-                        <TableCell className="font-medium">{booking.amount}</TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusBadge(booking.status)}>
-                            {booking.status.replace("_", " ")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className={`text-xs px-2 py-1 rounded-full ${getEscrowBadge(booking.escrowStatus)}`}>
-                            {booking.escrowStatus}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="gap-2">
-                            <Eye className="h-4 w-4" />
-                            View
-                          </Button>
-                        </TableCell>
+          <TabsContent value={selectedTab} className="space-y-4">
+            {filteredBookings.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  {selectedTab === "all" 
+                    ? "No bookings yet"
+                    : `No ${selectedTab === "new" ? "new booking requests" : selectedTab.replace("_", " ")} bookings at the moment`}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Booking ID</TableHead>
+                        <TableHead>Buyer</TableHead>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Date & Time</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="new">
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                No new booking requests at the moment
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="in_progress">
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                No in-progress bookings
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="completed">
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                No completed bookings
-              </CardContent>
-            </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredBookings.map((booking) => (
+                        <TableRow key={booking.id}>
+                          <TableCell className="font-medium">{booking.id.slice(0, 8)}...</TableCell>
+                          <TableCell>{getBuyerName(booking)}</TableCell>
+                          <TableCell>{booking.service?.title || 'Unknown Service'}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(booking.date).toLocaleDateString()}<br />
+                            <span className="text-xs">{booking.time}</span>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {booking.service?.default_price ? `GH₵ ${booking.service.default_price.toFixed(2)}` : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusBadge(booking.status)}>
+                              {booking.status.replace("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="gap-2"
+                              onClick={() => {
+                                // Navigate to booking detail page if it exists
+                                toast.info('Booking detail view coming soon');
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>

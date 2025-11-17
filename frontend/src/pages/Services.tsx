@@ -26,6 +26,7 @@ interface Service {
   express_delivery_time: string | null;
   category: string;
   user_id: string;
+  image_urls?: string[] | null;
   seller?: {
     id: string;
     title: string;
@@ -346,15 +347,22 @@ const Services = () => {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {services.map((service) => (
-                      <Card key={service.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                        <div className="relative aspect-video bg-muted">
-                          {/* Services don't have images yet, show placeholder */}
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-gradient-to-br from-primary/10 to-primary/5">
-                            <div className="text-center">
-                              <div className="text-4xl mb-2">🎨</div>
-                              <div className="text-xs">Service Image</div>
+                      <Card key={service.id} className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/service/${service.id}`)}>
+                        <div className="relative aspect-video bg-muted overflow-hidden">
+                          {service.image_urls && service.image_urls.length > 0 ? (
+                            <img
+                              src={service.image_urls[0]}
+                              alt={service.title}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-gradient-to-br from-primary/10 to-primary/5">
+                              <div className="text-center">
+                                <div className="text-4xl mb-2">🎨</div>
+                                <div className="text-xs">Service Image</div>
+                              </div>
                             </div>
-                          </div>
+                          )}
                           <Badge variant="category" className="absolute top-3 right-3">
                             {getCategoryLabel(service.category)}
                           </Badge>

@@ -295,7 +295,7 @@ const SellerProfile = () => {
                     description={service.description}
                     price={service.default_price || 0}
                     pricingType="fixed"
-                    imageUrls={[]}
+                    imageUrls={service.image_urls || []}
                     sellerName={seller.first_name && seller.last_name 
                       ? `${seller.first_name} ${seller.last_name}`
                       : seller.first_name || seller.last_name || 'User'}

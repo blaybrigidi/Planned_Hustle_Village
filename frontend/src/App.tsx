@@ -58,6 +58,11 @@ const App = () => (
               <Route path="profile" element={<SellerProfilePage />} />
             </Route>
             
+            {/* My Services route - redirects to seller services */}
+            <Route path="/my-services" element={<SellerDashboardLayout />}>
+              <Route index element={<SellerServices />} />
+            </Route>
+            
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

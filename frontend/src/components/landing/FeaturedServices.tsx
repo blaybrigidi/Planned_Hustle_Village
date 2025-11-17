@@ -17,7 +17,7 @@ interface FeaturedService {
   reviews: number;
   provider: string;
   university: string;
-  image?: string;
+  imageUrls?: string[];
 }
 
 export const FeaturedServices = () => {
@@ -36,16 +36,10 @@ export const FeaturedServices = () => {
       
       // Fetch featured services (active services, prefer verified but show all active)
       // First try to get verified services, if none, get any active services
+      // Note: Using '*' to get all columns, including image_urls if it exists
       let { data: servicesData, error: servicesError } = await supabase
         .from('services')
-        .select(`
-          id,
-          title,
-          category,
-          default_price,
-          user_id,
-          is_verified
-        `)
+        .select('*')
         .eq('is_active', true)
         .eq('is_verified', true)
         .limit(3);
@@ -55,15 +49,7 @@ export const FeaturedServices = () => {
         console.log('No verified services found, fetching all active services...');
         const { data: allActiveServices, error: allActiveError } = await supabase
           .from('services')
-          .select(`
-            id,
-            title,
-            category,
-            default_price,
-            user_id,
-            is_verified,
-            is_active
-          `)
+          .select('*')
           .or('is_active.eq.true,is_active.is.null')
           .limit(3);
 
@@ -97,8 +83,15 @@ export const FeaturedServices = () => {
         return;
       }
 
+      // Ensure servicesData is a valid array
+      if (!Array.isArray(servicesData)) {
+        console.error('servicesData is not an array:', servicesData);
+        setServices([]);
+        return;
+      }
+
       // Fetch profiles separately for all user_ids
-      const userIds = [...new Set(servicesData.map(s => s.user_id))];
+      const userIds = [...new Set(servicesData.map((s: any) => s.user_id).filter(Boolean))];
       let profilesMap: Record<string, { first_name: string | null; last_name: string | null }> = {};
 
       if (userIds.length > 0) {
@@ -125,7 +118,7 @@ export const FeaturedServices = () => {
       // Try to fetch reviews if table exists
       try {
         const { data: reviewsData } = await supabase
-          .from('reviews')
+          .from('reviews' as any)
           .select('reviewee_id, rating')
           .in('reviewee_id', userIds);
 
@@ -169,6 +162,7 @@ export const FeaturedServices = () => {
           reviews: reviews.count || 0,
           provider: providerName,
           university: 'Ashesi University', // Default university
+          imageUrls: service.image_urls || [],
         };
       });
 
@@ -260,12 +254,20 @@ export const FeaturedServices = () => {
               className="overflow-hidden group hover:shadow-lg transition-all duration-300 border-muted/60"
             >
               <div className="aspect-[4/3] relative overflow-hidden">
-                <div className="w-full h-full bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 flex items-center justify-center">
-                  <div className="text-center text-muted-foreground">
-                    <div className="text-6xl mb-2">🎨</div>
-                    <div className="text-xs">Service Image</div>
+                {service.imageUrls && service.imageUrls.length > 0 ? (
+                  <img
+                    src={service.imageUrls[0]}
+                    alt={service.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 flex items-center justify-center">
+                    <div className="text-center text-muted-foreground">
+                      <div className="text-6xl mb-2">🎨</div>
+                      <div className="text-xs">Service Image</div>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <Badge className="absolute top-3 right-3 bg-background/80 backdrop-blur-sm text-foreground">
                   {service.category}
@@ -276,7 +278,7 @@ export const FeaturedServices = () => {
                   <div>
                     <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
                       <button
-                        onClick={() => navigate(`/services/${service.id}`)}
+                        onClick={() => navigate(`/service/${service.id}`)}
                         className="hover:underline text-left"
                       >
                         {service.title}
@@ -299,10 +301,10 @@ export const FeaturedServices = () => {
                 </div>
               </CardContent>
               <CardFooter className="p-5 pt-0 flex justify-between">
-                <Button variant="outline" size="sm" onClick={() => navigate(`/services/${service.id}`)}>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/service/${service.id}`)}>
                   View Details
                 </Button>
-                <Button size="sm" onClick={() => navigate(`/services/${service.id}`)}>
+                <Button size="sm" onClick={() => navigate(`/service/${service.id}`)}>
                   Book Now
                 </Button>
               </CardFooter>

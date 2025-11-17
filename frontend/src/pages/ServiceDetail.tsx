@@ -22,6 +22,7 @@ interface Service {
   express_price: number | null;
   category: string;
   portfolio: string | null;
+  image_urls: string[] | null;
   user_id: string;
   created_at: string;
 }
@@ -81,6 +82,11 @@ const ServiceDetail = () => {
 
       if (serviceError) throw serviceError;
       setService(serviceData);
+      
+      // Set images from service data
+      if (serviceData?.image_urls && serviceData.image_urls.length > 0) {
+        setCurrentImageIndex(0);
+      }
 
       // Fetch seller details from profiles
       const { data: sellerData, error: sellerError } = await supabase
@@ -225,7 +231,7 @@ const ServiceDetail = () => {
           description: srv.description,
           price: srv.default_price || 0,
           pricingType: 'fixed',
-          imageUrls: [],
+          imageUrls: srv.image_urls || [],
           sellerName,
           sellerVerified: false,
           averageRating: ratings.avg || null,
@@ -244,7 +250,7 @@ const ServiceDetail = () => {
           description: srv.description,
           price: srv.default_price || 0,
           pricingType: 'fixed',
-          imageUrls: [],
+          imageUrls: srv.image_urls || [],
           sellerName: getSellerName(seller),
           sellerVerified: false,
           averageRating: ratings.avg || null,
@@ -349,8 +355,10 @@ const ServiceDetail = () => {
     );
   }
 
-  // Use placeholder image since schema doesn't have image_urls
-  const images = ['/placeholder.svg'];
+  // Use service images or placeholder
+  const images = (service?.image_urls && service.image_urls.length > 0) 
+    ? service.image_urls 
+    : ['/placeholder.svg'];
 
   return (
     <div className="min-h-screen flex flex-col">
