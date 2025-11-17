@@ -43,8 +43,10 @@ const Signup = () => {
   const [newLink, setNewLink] = useState('');
   const [uploadingImages, setUploadingImages] = useState(false);
   
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signup } = useAuth();
   const navigate = useNavigate();
 
   const handleStep1Submit = (e: React.FormEvent) => {
@@ -179,6 +181,22 @@ const Signup = () => {
   };
 
   const handleFinalSubmit = async () => {
+    // Validate password
+    if (!password) {
+      toast.error('Please enter a password');
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
     // Validate service info if seller
     if (userType === 'seller' || userType === 'both') {
       const portfolioText = formatPortfolio();
@@ -204,16 +222,20 @@ const Signup = () => {
 
     setLoading(true);
 
-    // Prepare signup data to send with OTP (will be stored in auth metadata)
+    // Map userType: buyer -> customer, seller -> seller, both -> both
+    const role = userType === 'buyer' ? 'customer' : userType;
+
+    // Prepare signup data for backend
     const signupData: any = {
       email,
+      password,
       firstName,
       lastName,
-      phoneNumber,
-      userType
+      phoneNumber: phoneNumber || undefined,
+      role,
     };
 
-    // Add service data if seller
+    // Add service data if seller (will be created after email verification)
     if (userType === 'seller' || userType === 'both') {
       signupData.service = {
         title: serviceTitle,
@@ -227,16 +249,17 @@ const Signup = () => {
       };
     }
 
-    // Pass signup data to signIn (will be stored in auth metadata)
-    const { error } = await signIn(email, signupData);
+    // Call backend signup endpoint
+    const { error } = await signup(signupData);
 
     setLoading(false);
 
     if (error) {
-      toast.error(error.message || 'Failed to send verification email');
+      toast.error(error.message || 'Failed to create account');
       return;
     }
 
+    // Navigate to verify email page
     navigate('/verify-email', { state: { email } });
   };
 
@@ -292,6 +315,30 @@ const Signup = () => {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number (Optional)</Label>
                 <Input
                   id="phone"
@@ -340,7 +387,7 @@ const Signup = () => {
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {userType === 'buyer' ? 'Sign up with Email' : 'Continue to Service Details'}
+                {userType === 'buyer' ? 'Create Account' : 'Continue to Service Details'}
               </Button>
             </form>
           ) : (

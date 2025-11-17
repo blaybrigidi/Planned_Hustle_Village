@@ -3,11 +3,21 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import api from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  signIn: (email: string, signupData?: any) => Promise<{ error: any }>;
+  signup: (data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string;
+    role: string;
+    service?: any;
+  }) => Promise<{ error: any }>;
+  login: (email: string, password: string) => Promise<{ error: any; data?: any }>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -21,22 +31,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Track if we've already processed this user to prevent duplicate calls
-    let hasProcessedUser = false;
-
-    // Set up auth state listener
+    // Set up auth state listener for Supabase session changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
-        if (event === 'SIGNED_IN' && session?.user && !hasProcessedUser) {
-          hasProcessedUser = true;
-          // Check if profile exists, create if needed
-          setTimeout(() => {
-            checkAndCreateProfile(session.user);
-          }, 0);
-        }
+        setLoading(false);
       }
     );
 
@@ -50,98 +50,115 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkAndCreateProfile = async (user: User) => {
+  const signup = async (data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string;
+    role: string;
+    service?: any;
+  }) => {
     try {
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle();
+      console.log('📝 Signing up via backend...');
+      
+      // Call backend signup endpoint
+      const response = await api.auth.signup({
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phoneNumber: data.phoneNumber,
+        role: data.role === 'buyer' ? 'customer' : data.role, // Map buyer to customer
+      }) as any;
 
-      if (!existingProfile) {
-        // Get signup data from auth metadata (stored in Supabase)
-        const signupData = user.user_metadata || {};
+      if (response.status !== 201) {
+        return { error: { message: response.msg || 'Signup failed' } };
+      }
 
-        // Create user profile with correct field names
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: user.id,
-          first_name: signupData.firstName || null,
-          last_name: signupData.lastName || null,
-          phone: signupData.phoneNumber || null,
-          role: signupData.userType || 'customer',
-          profile_pic: null,
-        });
+      console.log('✅ Signup successful, user created:', response.data);
 
-        if (profileError) {
-          // Handle duplicate key error gracefully (race condition from multiple auth state changes)
-          if (profileError.code === '23505') {
-            console.log('Profile already exists (duplicate key caught) - continuing...');
-            return;
-          }
-          console.error('Error creating profile:', profileError);
-          toast.error('Failed to create profile');
-          return;
-        }
-
-        // If user is a seller and has service data, create the service
-        if (signupData.service && (signupData.userType === 'seller' || signupData.userType === 'both')) {
-          const { error: serviceError } = await supabase.from('services').insert({
-            user_id: user.id,
-            title: signupData.service.title,
-            description: signupData.service.description,
-            category: signupData.service.category,
-            default_price: signupData.service.price || null,
-            default_delivery_time: signupData.service.default_delivery_time || null,
-            express_price: signupData.service.express_price || null,
-            express_delivery_time: signupData.service.express_delivery_time || null,
-            portfolio: signupData.service.portfolio || null,
-            is_active: true,
-          });
-
-          if (serviceError) {
-            console.error('Error creating service:', serviceError);
-            toast.error('Profile created but failed to create service. You can add it later.');
-          } else {
-            toast.success('Account and service created successfully!');
-          }
-        } else {
-          toast.success('Account created successfully!');
+      // If user is a seller and has service data, create the service after signup
+      if (data.service && (data.role === 'seller' || data.role === 'both')) {
+        console.log('🛠️ Creating service for seller...');
+        
+        // Note: Service creation requires authentication, so we'll need to handle this
+        // after email verification. For now, we'll store it in localStorage to create after verification
+        if (data.service) {
+          localStorage.setItem('pendingService', JSON.stringify(data.service));
         }
       }
-    } catch (error) {
-      console.error('Error checking profile:', error);
+
+      toast.success('Account created! Please check your email to verify your account.');
+      return { error: null };
+    } catch (error: any) {
+      console.error('❌ Signup error:', error);
+      return { error: { message: error.message || 'Signup failed' } };
     }
   };
 
-  const signIn = async (email: string, signupData?: any) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        data: signupData ? {
-          firstName: signupData.firstName,
-          lastName: signupData.lastName,
-          phoneNumber: signupData.phoneNumber,
-          userType: signupData.userType,
-          service: signupData.service
-        } : undefined
-      }
-    });
+  const login = async (email: string, password: string) => {
+    try {
+      console.log('🔐 Logging in via backend...');
+      
+      // Call backend login endpoint
+      const response = await api.auth.login(email, password) as any;
 
-    return { error };
+      if (response.status !== 200) {
+        return { error: { message: response.msg || 'Login failed' }, data: null };
+      }
+
+      // Backend returns Supabase session data
+      if (response.data?.session) {
+        // Set the session in Supabase client
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: response.data.session.access_token,
+          refresh_token: response.data.session.refresh_token,
+        });
+
+        if (sessionError) {
+          console.error('❌ Error setting session:', sessionError);
+          return { error: { message: 'Failed to set session' }, data: null };
+        }
+
+        // Update local state
+        setSession(response.data.session);
+        setUser(response.data.user);
+        
+        toast.success('Logged in successfully!');
+        return { error: null, data: response.data };
+      }
+
+      return { error: { message: 'No session returned' }, data: null };
+    } catch (error: any) {
+      console.error('❌ Login error:', error);
+      return { error: { message: error.message || 'Login failed' }, data: null };
+    }
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
+    try {
+      // Call backend logout endpoint
+      await api.auth.logout();
+      
+      // Also sign out from Supabase
+      await supabase.auth.signOut();
+      
       setUser(null);
       setSession(null);
       navigate('/');
       toast.success('Logged out successfully');
+    } catch (error: any) {
+      console.error('❌ Logout error:', error);
+      // Still clear local state even if backend call fails
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, signIn, signOut, loading }}>
+    <AuthContext.Provider value={{ user, session, signup, login, signOut, loading }}>
       {children}
     </AuthContext.Provider>
   );

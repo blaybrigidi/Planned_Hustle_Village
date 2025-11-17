@@ -6,11 +6,18 @@ export const signup = async ({ email, password, firstName, lastName, phoneNumber
   try {
     const metadata = { firstName, lastName, phoneNumber, profilePic, role };
 
+    // Get frontend URL from environment or use default
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+    const redirectUrl = `${frontendUrl}/verify-email`;
+
     // Step 1: Create auth user
     const { data, error } = await supabaseAdmin.auth.signUp({
       email,
       password,
-      options: { data: metadata }
+      options: { 
+        data: metadata,
+        emailRedirectTo: redirectUrl
+      }
     });
 
     if (error) {
@@ -79,7 +86,17 @@ export const login = async (email, password) => {
 
 export const resendVerification = async (email) => {
   try {
-    const { error } = await supabase.auth.resend({ email, type: "signup" });
+    // Get frontend URL from environment or use default
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+    const redirectUrl = `${frontendUrl}/verify-email`;
+
+    const { error } = await supabase.auth.resend({ 
+      email, 
+      type: "signup",
+      options: {
+        emailRedirectTo: redirectUrl
+      }
+    });
 
     if (error) {
       return { status: 400, msg: error.message, data: null };

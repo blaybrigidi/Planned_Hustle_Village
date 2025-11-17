@@ -18,21 +18,14 @@ async function apiFetch<T>(
     'Content-Type': 'application/json',
   };
 
-  // Get auth token from Supabase if available
+  // Get auth token from Supabase session if available
   try {
-    // Try to get the token from Supabase session storage
-    const keys = Object.keys(localStorage).filter(key => 
-      key.startsWith('sb-') && key.includes('-auth-token')
-    );
+    // Import supabase client dynamically to avoid circular dependencies
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (keys.length > 0) {
-      const sessionData = localStorage.getItem(keys[0]);
-      if (sessionData) {
-        const session = JSON.parse(sessionData);
-        if (session?.access_token) {
-          (defaultHeaders as any)['Authorization'] = `Bearer ${session.access_token}`;
-        }
-      }
+    if (session?.access_token) {
+      (defaultHeaders as any)['Authorization'] = `Bearer ${session.access_token}`;
     }
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -69,15 +62,37 @@ async function apiFetch<T>(
 export const api = {
   // Auth endpoints
   auth: {
+    signup: (data: {
+      email: string;
+      password: string;
+      firstName: string;
+      lastName: string;
+      phoneNumber?: string;
+      profilePic?: string;
+      role: string;
+    }) =>
+      apiFetch('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     login: (email: string, password: string) =>
       apiFetch('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
-    register: (data: any) =>
-      apiFetch('/auth/register', {
+    verifyEmail: (token: string, type?: string) =>
+      apiFetch('/auth/verify-email', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ token, type }),
+      }),
+    resendVerification: (email: string) =>
+      apiFetch('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    getMe: () =>
+      apiFetch('/auth/me', {
+        method: 'GET',
       }),
     logout: () =>
       apiFetch('/auth/logout', {

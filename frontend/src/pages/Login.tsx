@@ -9,28 +9,29 @@ import { toast } from 'sonner';
 
 const Login = () => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email) {
-      toast.error('Please enter your email address');
+    if (!email || !password) {
+      toast.error('Please enter your email and password');
       return;
     }
 
     setLoading(true);
 
-    // No signup data needed for login
-    const { error } = await signIn(email);
+    const { error, data } = await login(email, password);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(error.message || 'Login failed');
       setLoading(false);
     } else {
-      navigate('/verify-email', { state: { email } });
+      // Login successful, navigate to services page
+      navigate('/services');
     }
   };
 
@@ -55,6 +56,18 @@ const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
                 className="h-12"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                className="h-12"
+                required
               />
             </div>
             <Button 
@@ -63,13 +76,10 @@ const Login = () => {
               disabled={loading}
             >
               <Mail className="mr-2 h-5 w-5" />
-              {loading ? 'Sending...' : 'Sign in with Email'}
+              {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
           <div className="space-y-4 mt-6">
-            <p className="text-sm text-muted-foreground text-center">
-              We'll send you an 8-digit verification code to sign in
-            </p>
             <div className="text-center text-sm text-muted-foreground">
               Don't have an account?{' '}
               <Button
