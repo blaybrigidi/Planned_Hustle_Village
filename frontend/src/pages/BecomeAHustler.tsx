@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   DollarSign, 
   Clock, 
@@ -17,6 +19,13 @@ import {
 
 export const BecomeAHustler = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState([
+    { value: "0", label: "Active Hustlers" },
+    { value: "0", label: "Services Listed" },
+    { value: "GH₵0", label: "Earned This Month" },
+    { value: "0/5", label: "Average Rating" }
+  ]);
+  const [loading, setLoading] = useState(true);
 
   const benefits = [
     {
@@ -74,12 +83,145 @@ export const BecomeAHustler = () => {
     }
   ];
 
-  const stats = [
-    { value: "500+", label: "Active Hustlers" },
-    { value: "1,000+", label: "Services Listed" },
-    { value: "GH₵50K+", label: "Earned This Month" },
-    { value: "4.8/5", label: "Average Rating" }
-  ];
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch all stats in parallel
+      const [
+        sellerRoleResult,
+        bothRoleResult,
+        servicesResult,
+        bookingsResult,
+        reviewsResult
+      ] = await Promise.all([
+        // Fetch users with 'seller' role
+        supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'seller'),
+        
+        // Fetch users with 'both' role
+        supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'both'),
+        
+        // Count active services and get user IDs
+        supabase
+          .from('services')
+          .select('id, user_id, default_price', { count: 'exact', head: false })
+          .eq('is_active', true),
+        
+        // Fetch completed bookings this month
+        (async () => {
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+          
+          const { data: bookings } = await supabase
+            .from('bookings')
+            .select('service_id, status, created_at')
+            .eq('status', 'completed')
+            .gte('created_at', startOfMonth);
+          
+          return bookings || [];
+        })(),
+        
+        // Fetch all reviews for average rating
+        supabase
+          .from('reviews')
+          .select('rating')
+      ]);
+
+      // Count active hustlers - combine users with seller role and users who have active services
+      const hustlerIds = new Set<string>();
+      
+      // Add users with seller role
+      sellerRoleResult.data?.forEach(p => hustlerIds.add(p.id));
+      
+      // Add users with both role
+      bothRoleResult.data?.forEach(p => hustlerIds.add(p.id));
+      
+      // Add users who have active services (covers cases where role might not be set)
+      const serviceUserIds = servicesResult.data?.map(s => s.user_id) || [];
+      serviceUserIds.forEach(id => hustlerIds.add(id));
+      
+      const totalActiveHustlers = hustlerIds.size;
+
+      // Count active services
+      const servicesCount = servicesResult.count || servicesResult.data?.length || 0;
+
+      // Calculate earnings this month
+      const completedBookings = bookingsResult as any[];
+      const completedServiceIds = completedBookings.map(b => b.service_id);
+      
+      let earningsThisMonth = 0;
+      if (completedServiceIds.length > 0) {
+        const { data: completedServices } = await supabase
+          .from('services')
+          .select('id, default_price')
+          .in('id', completedServiceIds);
+        
+        const servicesMap: Record<string, number> = {};
+        completedServices?.forEach(service => {
+          servicesMap[service.id] = service.default_price || 0;
+        });
+        
+        earningsThisMonth = completedBookings.reduce((sum, booking) => {
+          return sum + (servicesMap[booking.service_id] || 0);
+        }, 0);
+      }
+
+      // Calculate average rating
+      const reviews = reviewsResult.data || [];
+      const averageRating = reviews.length > 0
+        ? reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviews.length
+        : 0;
+
+      // Format stats for display
+      setStats([
+        { 
+          value: totalActiveHustlers >= 1000 
+            ? `${(totalActiveHustlers / 1000).toFixed(1)}K+` 
+            : totalActiveHustlers >= 100
+            ? `${totalActiveHustlers}+`
+            : totalActiveHustlers.toString(), 
+          label: "Active Hustlers" 
+        },
+        { 
+          value: servicesCount >= 1000 
+            ? `${(servicesCount / 1000).toFixed(1)}K+` 
+            : servicesCount >= 100
+            ? `${servicesCount}+`
+            : servicesCount.toString(), 
+          label: "Services Listed" 
+        },
+        { 
+          value: earningsThisMonth >= 1000000 
+            ? `GH₵${(earningsThisMonth / 1000000).toFixed(1)}M+` 
+            : earningsThisMonth >= 1000
+            ? `GH₵${(earningsThisMonth / 1000).toFixed(0)}K+`
+            : `GH₵${earningsThisMonth.toFixed(0)}`, 
+          label: "Earned This Month" 
+        },
+        { 
+          value: averageRating > 0 
+            ? `${averageRating.toFixed(1)}/5` 
+            : "0/5", 
+          label: "Average Rating" 
+        }
+      ]);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      // Keep default stats on error
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
