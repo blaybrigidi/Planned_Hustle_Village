@@ -23,6 +23,7 @@ import SellerDashboardPreview from "./pages/SellerDashboardPreview";
 import Bookings from "./pages/Bookings";
 import BookingDetail from "./pages/BookingDetail";
 import BecomeAHustler from "./pages/BecomeAHustler";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -39,7 +40,9 @@ const App = () => (
             <Route path="/service/:id" element={<ServiceDetail />} />
             <Route path="/sellers/:id" element={<SellerProfile />} />
             <Route path="/bookings" element={<Bookings />} />
+            <Route path="/my-bookings" element={<Bookings />} />
             <Route path="/booking/:id" element={<BookingDetail />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/verify-email" element={<VerifyEmail />} />

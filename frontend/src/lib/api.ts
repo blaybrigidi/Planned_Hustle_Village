@@ -98,10 +98,16 @@ async function apiFetch<T>(
   try {
     // Import supabase client dynamically to avoid circular dependencies
     const { supabase } = await import('@/integrations/supabase/client');
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+    }
     
     if (session?.access_token) {
       (defaultHeaders as any)['Authorization'] = `Bearer ${session.access_token}`;
+    } else {
+      console.warn('No valid session token available for API request');
     }
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -118,6 +124,16 @@ async function apiFetch<T>(
   try {
     const response = await fetch(url, config);
     
+    // Log response for debugging (only in development)
+    if (import.meta.env.DEV) {
+      console.log('API Request:', {
+        url,
+        method: options.method || 'GET',
+        hasAuth: !!(config.headers as any)?.['Authorization'],
+        status: response.status,
+      });
+    }
+    
     if (!response.ok) {
       // Try to parse error response from backend
       let errorData: any;
@@ -128,12 +144,25 @@ async function apiFetch<T>(
         errorData = { msg: `HTTP ${response.status}: ${response.statusText}` };
       }
 
+      // Log error for debugging
+      if (import.meta.env.DEV) {
+        console.error('API Error Response:', errorData);
+      }
+
       // Backend returns errors in format: { status, msg, data }
       // Extract the user-friendly message
       const errorMessage = errorData.msg || errorData.message || errorData.error;
       
       // Map common technical errors to user-friendly messages
       const friendlyMessage = getFriendlyErrorMessage(errorMessage, response.status);
+      
+      // For 401 errors, include the original error data for debugging
+      if (response.status === 401) {
+        const error = new Error(friendlyMessage);
+        (error as any).status = 401;
+        (error as any).originalError = errorData;
+        throw error;
+      }
       
       throw new Error(friendlyMessage);
     }

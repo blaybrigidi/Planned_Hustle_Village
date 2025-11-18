@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -66,12 +67,26 @@ export default function Bookings() {
   const [selectedTab, setSelectedTab] = useState("all");
 
   useEffect(() => {
-    if (user) {
+    const checkSessionAndFetch = async () => {
+      if (!user) {
+        navigate("/login");
+        return;
+      }
+
+      // Verify session is still valid
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        toast.error("Your session has expired. Please sign in again.");
+        navigate("/login");
+        return;
+      }
+
       fetchBookings();
-    } else {
-      navigate("/login");
-    }
-  }, [user]);
+    };
+
+    checkSessionAndFetch();
+  }, [user, navigate]);
 
   const fetchBookings = async () => {
     if (!user) return;
@@ -82,12 +97,30 @@ export default function Bookings() {
 
       if (result.status === 200) {
         setBookings(result.data?.bookings || []);
+      } else if (result.status === 401) {
+        // Token expired or invalid - redirect to login
+        console.error("401 Unauthorized - Session expired or invalid token");
+        toast.error("Your session has expired. Please sign in again.");
+        // Clear any stale session
+        await supabase.auth.signOut();
+        navigate("/login");
       } else {
         toast.error(result.msg || "Failed to load bookings");
       }
     } catch (error: any) {
       console.error("Error fetching bookings:", error);
-      toast.error(error.message || "Failed to load bookings");
+      console.error("Error details:", error.originalError || error);
+      
+      // Check if it's an authentication error
+      if (error.status === 401 || error.message?.includes("authorized") || error.message?.includes("sign in") || error.message?.includes("401")) {
+        console.error("Authentication error detected - redirecting to login");
+        toast.error("Your session has expired. Please sign in again.");
+        // Clear any stale session
+        await supabase.auth.signOut();
+        navigate("/login");
+      } else {
+        toast.error(error.message || "Failed to load bookings");
+      }
     } finally {
       setLoading(false);
     }

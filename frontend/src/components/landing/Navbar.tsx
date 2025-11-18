@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Menu, User, LogOut, Package, Calendar } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useUserType } from "@/hooks/useUserType";
+import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,10 +20,55 @@ export const Navbar = () => {
   const { user, signOut } = useAuth();
   const { canListServices } = useUserType();
   const navigate = useNavigate();
+  const [userProfile, setUserProfile] = useState<{ first_name: string | null; last_name: string | null } | null>(null);
 
-  const getInitials = (email?: string) => {
-    if (!email) return "U";
-    return email.charAt(0).toUpperCase();
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    } else {
+      setUserProfile(null);
+    }
+  }, [user]);
+
+  const fetchUserProfile = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return;
+      }
+
+      setUserProfile({
+        first_name: data?.first_name || null,
+        last_name: data?.last_name || null,
+      });
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
+  };
+
+  const getInitials = () => {
+    if (!user) return "U";
+    
+    // Use first name if available
+    if (userProfile?.first_name) {
+      return userProfile.first_name.charAt(0).toUpperCase();
+    }
+    
+    // Fallback to last name if first name not available
+    if (userProfile?.last_name) {
+      return userProfile.last_name.charAt(0).toUpperCase();
+    }
+    
+    // Final fallback to email (shouldn't happen if profile exists)
+    return user.email?.charAt(0).toUpperCase() || "U";
   };
 
   return (
@@ -50,7 +96,7 @@ export const Navbar = () => {
                     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                       <Avatar className="h-10 w-10">
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {getInitials(user.email)}
+                          {getInitials()}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
