@@ -19,28 +19,43 @@ export type Database = {
           id: string
           buyer_id: string
           service_id: string
-          date: string
-          time: string
-          status: "pending" | "accepted" | "in_progress" | "completed"
+          date: string | null
+          time: string | null
+          status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled"
           created_at: string | null
+          payment_status: string | null
+          payment_captured_at: string | null
+          payment_released_at: string | null
+          payment_amount: number | null
+          payment_transaction_id: string | null
         }
         Insert: {
           id?: string
           buyer_id: string
           service_id: string
-          date: string
-          time: string
-          status?: "pending" | "accepted" | "in_progress" | "completed"
+          date?: string | null
+          time?: string | null
+          status?: "pending" | "accepted" | "in_progress" | "completed" | "cancelled"
           created_at?: string | null
+          payment_status?: string | null
+          payment_captured_at?: string | null
+          payment_released_at?: string | null
+          payment_amount?: number | null
+          payment_transaction_id?: string | null
         }
         Update: {
           id?: string
           buyer_id?: string
           service_id?: string
-          date?: string
-          time?: string
-          status?: "pending" | "accepted" | "in_progress" | "completed"
+          date?: string | null
+          time?: string | null
+          status?: "pending" | "accepted" | "in_progress" | "completed" | "cancelled"
           created_at?: string | null
+          payment_status?: string | null
+          payment_captured_at?: string | null
+          payment_released_at?: string | null
+          payment_amount?: number | null
+          payment_transaction_id?: string | null
         }
         Relationships: [
           {

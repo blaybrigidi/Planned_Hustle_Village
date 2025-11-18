@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Star, CheckCircle2, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ServiceCard } from "@/components/services/ServiceCard";
 import { useCategories } from "@/hooks/useCategories";
+import { BookingForm } from "@/components/bookings/BookingForm";
 
 interface Service {
   id: string;
@@ -20,6 +22,8 @@ interface Service {
   description: string;
   default_price: number | null;
   express_price: number | null;
+  default_delivery_time: string | null;
+  express_delivery_time: string | null;
   category: string;
   portfolio: string | null;
   image_urls: string[] | null;
@@ -56,6 +60,7 @@ const ServiceDetail = () => {
   const [service, setService] = useState<Service | null>(null);
   const [seller, setSeller] = useState<Seller | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [showBookingForm, setShowBookingForm] = useState(false);
   const [relatedServices, setRelatedServices] = useState<any[]>([]);
   const [sellerServices, setSellerServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +78,7 @@ const ServiceDetail = () => {
     try {
       setLoading(true);
 
-      // Fetch service details
+      // Step 1: Fetch service details first (needed for everything else)
       const { data: serviceData, error: serviceError } = await supabase
         .from('services')
         .select('*')
@@ -81,52 +86,149 @@ const ServiceDetail = () => {
         .single();
 
       if (serviceError) throw serviceError;
-      setService(serviceData);
+      setService(serviceData as unknown as Service);
       
       // Set images from service data
-      if (serviceData?.image_urls && serviceData.image_urls.length > 0) {
+      if ((serviceData as any)?.image_urls && (serviceData as any).image_urls.length > 0) {
         setCurrentImageIndex(0);
       }
 
-      // Fetch seller details from profiles
-      const { data: sellerData, error: sellerError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', serviceData.user_id)
-        .single();
-
-      if (sellerError) throw sellerError;
-      setSeller(sellerData);
-
-      // Fetch reviews for this seller
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from('reviews')
-        .select(`
-          id,
-          rating,
-          review_text,
-          created_at,
-          reviewer_id
-        `)
-        .eq('reviewee_id', serviceData.user_id)
-        .order('created_at', { ascending: false });
-
-      if (reviewsError) throw reviewsError;
-
-      // Fetch reviewer profiles separately
-      if (reviewsData && reviewsData.length > 0) {
-        const reviewerIds = [...new Set(reviewsData.map(r => r.reviewer_id))];
-        const { data: profilesData } = await supabase
+      // Step 2: Parallelize independent queries that depend only on serviceData
+      const [
+        sellerResult,
+        reviewsResult,
+        relatedServicesResult,
+        sellerServicesResult,
+        bookingCheckResult
+      ] = await Promise.all([
+        // Fetch seller details
+        supabase
           .from('profiles')
-          .select('id, first_name, last_name, profile_pic')
-          .in('id', reviewerIds);
+          .select('*')
+          .eq('id', serviceData.user_id)
+          .single(),
+        
+        // Fetch reviews for this seller
+        supabase
+          .from('reviews' as any)
+          .select('id, rating, review_text, created_at, reviewer_id')
+          .eq('reviewee_id', serviceData.user_id)
+          .order('created_at', { ascending: false }),
+        
+        // Fetch related services (same category, different seller)
+        supabase
+          .from('services')
+          .select('*')
+          .eq('category', serviceData.category)
+          .eq('is_active', true)
+          .neq('user_id', serviceData.user_id)
+          .limit(4),
+        
+        // Fetch more services from this seller
+        supabase
+          .from('services')
+          .select('*')
+          .eq('user_id', serviceData.user_id)
+          .eq('is_active', true)
+          .neq('id', id)
+          .limit(4),
+        
+        // Check if user can review (parallel with other queries)
+        user
+          ? supabase
+              .from('bookings')
+              .select('id')
+              .eq('service_id', id)
+              .eq('buyer_id', user.id)
+              .eq('status', 'completed')
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null })
+      ]);
 
+      // Handle seller result
+      if (sellerResult.error) throw sellerResult.error;
+      setSeller(sellerResult.data);
+
+      // Handle reviews result
+      if (reviewsResult.error) throw reviewsResult.error;
+      const reviewsData = ((reviewsResult.data || []) as unknown) as Array<{
+        id: string;
+        rating: number;
+        review_text: string | null;
+        created_at: string;
+        reviewer_id: string;
+      }>;
+
+      // Calculate average rating
+      if (reviewsData.length > 0) {
+        const avg = reviewsData.reduce((acc, r) => acc + r.rating, 0) / reviewsData.length;
+        setAverageRating(avg);
+      }
+
+      // Handle booking check
+      if (bookingCheckResult.data) {
+        setCanReview(!!bookingCheckResult.data);
+      }
+
+      // Step 3: Parallelize dependent queries
+      const relatedData = relatedServicesResult.data || [];
+      const sellerServicesData = sellerServicesResult.data || [];
+
+      // Prepare data for related services queries
+      const allServiceIds = [
+        ...relatedData.map(s => s.id),
+        ...sellerServicesData.map(s => s.id)
+      ];
+      const allSellerIds = [
+        ...new Set([
+          ...relatedData.map(s => s.user_id),
+          ...sellerServicesData.map(s => s.user_id)
+        ])
+      ];
+
+      // Get reviewer IDs for this service's reviews
+      const reviewerIds = reviewsData.length > 0
+        ? [...new Set(reviewsData.map(r => r.reviewer_id))]
+        : [];
+
+      // Parallelize fetching reviewer profiles, seller profiles, and related service reviews
+      const [
+        reviewerProfilesResult,
+        sellerProfilesResult,
+        relatedReviewsResult
+      ] = await Promise.all([
+        // Fetch reviewer profiles (if there are reviews)
+        reviewerIds.length > 0
+          ? supabase
+              .from('profiles')
+              .select('id, first_name, last_name, profile_pic')
+              .in('id', reviewerIds)
+          : Promise.resolve({ data: [], error: null }),
+        
+        // Fetch seller profiles for related services
+        allSellerIds.length > 0
+          ? supabase
+              .from('profiles')
+              .select('id, first_name, last_name')
+              .in('id', allSellerIds)
+          : Promise.resolve({ data: [], error: null }),
+        
+        // Fetch reviews for all related services
+        allServiceIds.length > 0
+          ? supabase
+              .from('reviews' as any)
+              .select('service_id, rating')
+              .in('service_id', allServiceIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      // Process reviews with reviewer data
+      if (reviewsData.length > 0 && reviewerProfilesResult.data) {
         const profilesMap: Record<string, any> = {};
-        profilesData?.forEach(profile => {
+        reviewerProfilesResult.data.forEach(profile => {
           profilesMap[profile.id] = profile;
         });
 
-        // Map reviews with reviewer data
         const mappedReviews = reviewsData.map((review: any) => ({
           id: review.id,
           rating: review.rating,
@@ -144,64 +246,15 @@ const ServiceDetail = () => {
         setReviews([]);
       }
 
-      // Calculate average rating
-      if (reviewsData && reviewsData.length > 0) {
-        const avg = reviewsData.reduce((acc, r) => acc + r.rating, 0) / reviewsData.length;
-        setAverageRating(avg);
-      }
-
-      // Fetch related services (same category, different seller)
-      const { data: relatedData } = await supabase
-        .from('services')
-        .select('*')
-        .eq('category', serviceData.category)
-        .eq('is_active', true)
-        .neq('user_id', serviceData.user_id)
-        .limit(4);
-
-      // Fetch more services from this seller
-      const { data: sellerServicesData } = await supabase
-        .from('services')
-        .select('*')
-        .eq('user_id', serviceData.user_id)
-        .eq('is_active', true)
-        .neq('id', id)
-        .limit(4);
-
-      // Fetch seller profiles for all related and seller services
-      const allServiceIds = [
-        ...(relatedData || []).map(s => s.id),
-        ...(sellerServicesData || []).map(s => s.id)
-      ];
-      const allSellerIds = [
-        ...new Set([
-          ...(relatedData || []).map(s => s.user_id),
-          ...(sellerServicesData || []).map(s => s.user_id)
-        ])
-      ];
-
-      // Fetch seller profiles
-      const { data: sellerProfiles } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .in('id', allSellerIds);
-
+      // Process related services data
       const sellerProfilesMap: Record<string, any> = {};
-      sellerProfiles?.forEach(profile => {
+      (sellerProfilesResult.data || []).forEach(profile => {
         sellerProfilesMap[profile.id] = profile;
       });
 
-      // Fetch reviews for all services to calculate ratings
-      const { data: allReviewsData } = allServiceIds.length > 0
-        ? await supabase
-            .from('reviews')
-            .select('service_id, rating')
-            .in('service_id', allServiceIds)
-        : { data: [] };
-
       // Calculate ratings per service
       const serviceRatingsMap: Record<string, { sum: number; count: number; avg: number }> = {};
-      allReviewsData?.forEach((review: any) => {
+      (((relatedReviewsResult.data || []) as unknown) as Array<{ service_id: string; rating: number }>).forEach((review) => {
         if (!serviceRatingsMap[review.service_id]) {
           serviceRatingsMap[review.service_id] = { sum: 0, count: 0, avg: 0 };
         }
@@ -216,7 +269,7 @@ const ServiceDetail = () => {
       });
 
       // Map related services with proper props
-      const mappedRelatedServices = (relatedData || []).map((srv: any) => {
+      const mappedRelatedServices = relatedData.map((srv: any) => {
         const sellerProfile = sellerProfilesMap[srv.user_id];
         const sellerName = sellerProfile
           ? (sellerProfile.first_name && sellerProfile.last_name
@@ -241,7 +294,7 @@ const ServiceDetail = () => {
       });
 
       // Map seller services with proper props
-      const mappedSellerServices = (sellerServicesData || []).map((srv: any) => {
+      const mappedSellerServices = sellerServicesData.map((srv: any) => {
         const ratings = serviceRatingsMap[srv.id] || { avg: 0, count: 0 };
 
         return {
@@ -251,7 +304,7 @@ const ServiceDetail = () => {
           price: srv.default_price || 0,
           pricingType: 'fixed',
           imageUrls: srv.image_urls || [],
-          sellerName: getSellerName(seller),
+          sellerName: getSellerName(sellerResult.data),
           sellerVerified: false,
           averageRating: ratings.avg || null,
           reviewCount: ratings.count || 0,
@@ -261,19 +314,6 @@ const ServiceDetail = () => {
 
       setRelatedServices(mappedRelatedServices);
       setSellerServices(mappedSellerServices);
-
-      // Check if user can review (has completed booking)
-      if (user) {
-        const { data: bookingData } = await supabase
-          .from('bookings')
-          .select('id')
-          .eq('service_id', id)
-          .eq('buyer_id', user.id)
-          .eq('status', 'completed')
-          .maybeSingle();
-
-        setCanReview(!!bookingData);
-      }
     } catch (error) {
       console.error('Error fetching service details:', error);
       toast.error('Failed to load service details');
@@ -306,8 +346,13 @@ const ServiceDetail = () => {
       navigate('/login');
       return;
     }
-    // Navigate to booking page (to be implemented)
-    toast.info('Booking functionality coming soon!');
+    setShowBookingForm(true);
+  };
+
+  const handleBookingSuccess = (bookingId: string) => {
+    setShowBookingForm(false);
+    toast.success('Booking created successfully!');
+    navigate(`/booking/${bookingId}`);
   };
 
   const handleMessageSeller = () => {
@@ -662,6 +707,25 @@ const ServiceDetail = () => {
       </main>
 
       <Footer />
+
+      {/* Booking Form Dialog */}
+      <Dialog open={showBookingForm} onOpenChange={setShowBookingForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Book Service: {service?.title}</DialogTitle>
+          </DialogHeader>
+          {service && (
+            <BookingForm
+              serviceId={service.id}
+              serviceTitle={service.title}
+              defaultPrice={service.default_price}
+              expressPrice={service.express_price}
+              onSuccess={handleBookingSuccess}
+              onCancel={() => setShowBookingForm(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,9 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useCategories } from "@/hooks/useCategories";
 
 interface StudentProfile {
   first_name: string | null;
@@ -17,6 +20,19 @@ export const Hero = () => {
   const [techCount, setTechCount] = useState(0);
   const [studentCount, setStudentCount] = useState(0);
   const [studentProfiles, setStudentProfiles] = useState<StudentProfile[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const { categories } = useCategories();
+
+  const searchSuggestions = useMemo(() => {
+    const names = categories.map((category) => category.name || category.slug);
+    if (!names.length) return [];
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) {
+      return names.slice(0, 6);
+    }
+    return names.filter((name) => name?.toLowerCase().includes(term)).slice(0, 6);
+  }, [categories, searchTerm]);
 
   useEffect(() => {
     fetchCategoryCounts();
@@ -94,20 +110,21 @@ export const Hero = () => {
     return '?';
   };
 
-  const handleGetStarted = () => {
-    if (!user) {
-      navigate('/login');
-    } else {
+  const handleSearch = () => {
+    if (!searchTerm.trim()) {
       navigate('/services');
+      return;
     }
+    navigate(`/services?query=${encodeURIComponent(searchTerm.trim())}`);
   };
 
-  const handleBrowseServices = () => {
-    navigate('/services');
+  const handleSuggestionSelect = (value: string) => {
+    setSearchTerm(value);
+    navigate(`/services?query=${encodeURIComponent(value)}`);
   };
 
   return (
-    <section className="relative py-20 md:py-32 overflow-hidden">
+    <section className="relative py-20 md:py-32">
       {/* Background gradient with pattern */}
       <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 -z-10">
         <div
@@ -120,27 +137,18 @@ export const Hero = () => {
       </div>
 
       <div className="container mx-auto px-4 md:px-6 relative z-10">
-        <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
-          <div className="space-y-6">
-            <Badge className="px-3 py-1 text-sm mb-2">Student-Powered Marketplace</Badge>
+        <div className="max-w-5xl space-y-8">
+          <div className="space-y-6 text-left max-w-3xl">
+            <Badge className="px-3 py-1 text-sm">Student-Powered Marketplace</Badge>
             
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-              Your Campus, Your Hustle, Your Village
-        </h1>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
+              Your <span className="text-primary">Campus</span>, Your <span className="text-accent">Hustle</span>, Your <span className="text-primary">Village</span>
+            </h1>
             
-            <p className="text-xl text-muted-foreground max-w-[600px]">
+            <p className="text-xl text-muted-foreground">
               Connect with talented students offering services on your campus. From tutoring to web development, find
               the help you need from your peers.
-        </p>
-        
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button size="lg" className="bg-primary hover:bg-primary/90" onClick={handleGetStarted}>
-                Get Started
-              </Button>
-              <Button size="lg" variant="outline" onClick={handleBrowseServices}>
-                Browse Services
-              </Button>
-            </div>
+            </p>
 
             <div className="flex items-center gap-4 pt-4">
               <div className="flex -space-x-3">
@@ -165,37 +173,63 @@ export const Hero = () => {
             </div>
           </div>
 
-          <div className="relative h-[500px] lg:h-[600px] rounded-xl overflow-hidden shadow-xl">
-            <div className="w-full h-full bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 flex items-center justify-center">
-              <div className="text-center text-muted-foreground">
-                <div className="text-6xl mb-4">🎓</div>
-                <div className="text-sm">Students Collaborating</div>
-              </div>
-            </div>
+          <div className="space-y-4">
+            <div className="max-w-4xl space-y-3">
+              <div className="relative">
+                <Input
+                  placeholder="Try tutoring, brand design, photography..."
+                  value={searchTerm}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 120)}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-14 rounded-full pl-14 pr-5 text-base border border-muted/80 shadow-none focus-visible:ring-1 focus-visible:ring-primary/40"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSearch();
+                    }
+                  }}
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-primary/10 p-2.5">
+                  <Search className="h-5 w-5 text-primary" />
+                </span>
 
-            {/* Floating cards */}
-            <div className="absolute -bottom-6 -left-6 w-64 bg-background/90 backdrop-blur-sm p-4 rounded-lg shadow-lg border border-muted">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xl">
-                  🎓
-                </div>
-                <div>
-                  <p className="font-medium">Tutoring Services</p>
-                  <p className="text-xs text-muted-foreground">{tutoringCount} available {tutoringCount === 1 ? 'tutor' : 'tutors'}</p>
-                </div>
-          </div>
-        </div>
-
-            <div className="absolute top-10 -right-6 w-64 bg-background/90 backdrop-blur-sm p-4 rounded-lg shadow-lg border border-muted">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xl">
-                  💻
-                </div>
-                <div>
-                  <p className="font-medium">Tech Services</p>
-                  <p className="text-xs text-muted-foreground">{techCount} available {techCount === 1 ? 'developer' : 'developers'}</p>
-                </div>
+                {searchSuggestions.length > 0 && (isSearchFocused || searchTerm) && (
+                  <div className="absolute left-0 right-0 mt-3 rounded-2xl border border-muted bg-white/95 shadow-xl backdrop-blur z-20">
+                    <div className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                      Suggestions
+                    </div>
+                    <div className="divide-y divide-muted/60">
+                      {searchSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          className="w-full text-left px-4 py-3 text-sm text-foreground hover:bg-primary/5 transition"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSuggestionSelect(suggestion);
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {categories.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  <span className="text-foreground/70 whitespace-nowrap">Explore:</span>
+                  {categories.slice(0, 5).map((category) => (
+                    <button
+                      key={category.slug}
+                      className="rounded-full border border-primary/20 px-3 py-1 text-foreground/80 hover:bg-primary/5 transition whitespace-nowrap"
+                      onClick={() => setSearchTerm(category.name || category.slug)}
+                    >
+                      {category.name || category.slug}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

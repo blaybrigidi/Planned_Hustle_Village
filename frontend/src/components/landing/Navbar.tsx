@@ -35,12 +35,6 @@ export const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
-            <a href="/#services" className="text-foreground hover:text-primary transition-colors">
-              Browse Services
-            </a>
-            <a href="/#how-it-works" className="text-foreground hover:text-primary transition-colors">
-              How It Works
-            </a>
           </div>
 
           <div className="hidden md:flex items-center gap-4">
@@ -72,14 +66,16 @@ export const Navbar = () => {
                       <User className="mr-2 h-4 w-4" />
                       Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/my-services')}>
-                      <Package className="mr-2 h-4 w-4" />
-                      My Services
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/my-bookings')}>
                       <Calendar className="mr-2 h-4 w-4" />
                       My Bookings
                     </DropdownMenuItem>
+                    {canListServices && (
+                      <DropdownMenuItem onClick={() => navigate('/my-services')}>
+                        <Package className="mr-2 h-4 w-4" />
+                        My Services
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={signOut}>
                       <LogOut className="mr-2 h-4 w-4" />
@@ -92,14 +88,20 @@ export const Navbar = () => {
               <div className="flex items-center gap-2">
                 <Button 
                   variant="ghost" 
+                  onClick={() => navigate('/become-a-hustler')}
+                >
+                  Become a Hustler
+                </Button>
+                <Button 
+                  variant="ghost" 
                   onClick={() => navigate('/login')}
                 >
-                  Log in
+                  Sign in
                 </Button>
                 <Button 
                   onClick={() => navigate('/signup')}
                 >
-                  Sign up
+                  Join
                 </Button>
               </div>
             )}
@@ -118,12 +120,6 @@ export const Navbar = () => {
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-border">
             <div className="flex flex-col gap-4">
-              <a href="/#services" className="text-foreground hover:text-primary transition-colors">
-                Browse Services
-              </a>
-              <a href="/#how-it-works" className="text-foreground hover:text-primary transition-colors">
-                How It Works
-              </a>
               {user ? (
                 <>
                   {canListServices && (
@@ -136,14 +132,16 @@ export const Navbar = () => {
                       <User className="mr-2 h-4 w-4" />
                       Profile
                     </Button>
-                    <Button variant="ghost" className="w-full" onClick={() => navigate('/my-services')}>
-                      <Package className="mr-2 h-4 w-4" />
-                      My Services
-                    </Button>
                     <Button variant="ghost" className="w-full" onClick={() => navigate('/my-bookings')}>
                       <Calendar className="mr-2 h-4 w-4" />
                       My Bookings
                     </Button>
+                    {canListServices && (
+                      <Button variant="ghost" className="w-full" onClick={() => navigate('/my-services')}>
+                        <Package className="mr-2 h-4 w-4" />
+                        My Services
+                      </Button>
+                    )}
                     <Button variant="destructive" className="w-full" onClick={signOut}>
                       <LogOut className="mr-2 h-4 w-4" />
                       Logout
@@ -153,17 +151,24 @@ export const Navbar = () => {
               ) : (
                 <div className="flex flex-col gap-2">
                   <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => navigate('/become-a-hustler')}
+                  >
+                    Become a Hustler
+                  </Button>
+                  <Button 
                     variant="ghost" 
                     className="w-full"
                     onClick={() => navigate('/login')}
                   >
-                    Log in
+                    Sign in
                   </Button>
                   <Button 
                     className="w-full"
                     onClick={() => navigate('/signup')}
                   >
-                    Sign up
+                    Join
                   </Button>
                 </div>
               )}

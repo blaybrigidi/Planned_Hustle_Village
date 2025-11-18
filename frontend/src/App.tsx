@@ -20,6 +20,9 @@ import SellerBookings from "./pages/seller/SellerBookings";
 import SellerPayments from "./pages/seller/SellerPayments";
 import SellerProfilePage from "./pages/seller/SellerProfile";
 import SellerDashboardPreview from "./pages/SellerDashboardPreview";
+import Bookings from "./pages/Bookings";
+import BookingDetail from "./pages/BookingDetail";
+import BecomeAHustler from "./pages/BecomeAHustler";
 
 const queryClient = new QueryClient();
 
@@ -35,9 +38,12 @@ const App = () => (
             <Route path="/services" element={<Services />} />
             <Route path="/service/:id" element={<ServiceDetail />} />
             <Route path="/sellers/:id" element={<SellerProfile />} />
+            <Route path="/bookings" element={<Bookings />} />
+            <Route path="/booking/:id" element={<BookingDetail />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/become-a-hustler" element={<BecomeAHustler />} />
             <Route path="/list-service" element={<ListService />} />
             
             {/* ⚠️ DEVELOPMENT PREVIEW - DELETE BEFORE PRODUCTION ⚠️ */}

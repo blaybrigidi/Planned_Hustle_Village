@@ -11,32 +11,42 @@ const bookNow = async (req) => {
       return { status: 401, msg: "Unauthorized: user not found", data: null };
     }
 
-    const { serviceId, date, time, status } = req.body;
+    const { serviceId, date, time, status, note } = req.body;
 
     // Validation
     if (!serviceId) {
       return { status: 400, msg: "Service ID is required", data: null };
     }
 
-    if (!date || !time) {
-      return { status: 400, msg: "Date and time are required", data: null };
-    }
+    // Date and time are now optional (for instant bookings)
+    // Only validate if both are provided
+    if (date || time) {
+      if (!date || !time) {
+        return { status: 400, msg: "Both date and time are required if scheduling", data: null };
+      }
 
-    // Validate date format (basic check)
-    const dateObj = new Date(date);
-    if (isNaN(dateObj.getTime())) {
-      return { status: 400, msg: "Invalid date format", data: null };
-    }
+      // Validate date format (basic check)
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) {
+        return { status: 400, msg: "Invalid date format", data: null };
+      }
 
-    // Check if date is in the future
-    if (dateObj < new Date()) {
-      return { status: 400, msg: "Booking date must be in the future", data: null };
+      // Check if date is in the future
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(dateObj);
+      selected.setHours(0, 0, 0, 0);
+
+      if (selected < today) {
+        return { status: 400, msg: "Booking date must be in the future", data: null };
+      }
     }
 
     const result = await bookingService.bookNow(userId, serviceId, {
-      date,
-      time,
-      status: status || 'pending'
+      date: date || null,
+      time: time || null,
+      status: status || 'pending',
+      note: note || null
     });
 
     return {
@@ -132,11 +142,74 @@ const acceptBooking = async (req) => {
   }
 };
 
+/**
+ * Update booking status
+ * Requires: status in request body
+ */
+const updateBookingStatus = async (req) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return { status: 401, msg: "Unauthorized: user not found", data: null };
+    }
+
+    const { bookingId } = req.params;
+    const { status } = req.body;
+
+    if (!bookingId) {
+      return { status: 400, msg: "Booking ID is required", data: null };
+    }
+
+    if (!status) {
+      return { status: 400, msg: "Status is required", data: null };
+    }
+
+    const result = await bookingService.updateBookingStatus(userId, bookingId, status);
+    return {
+      status: result.status,
+      msg: result.msg,
+      data: result.data
+    };
+  } catch (error) {
+    console.error("Update booking status error:", error);
+    return { status: 500, msg: "Failed to update booking status", data: null };
+  }
+};
+
+/**
+ * Cancel booking
+ */
+const cancelBooking = async (req) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return { status: 401, msg: "Unauthorized: user not found", data: null };
+    }
+
+    const { bookingId } = req.params;
+    if (!bookingId) {
+      return { status: 400, msg: "Booking ID is required", data: null };
+    }
+
+    const result = await bookingService.cancelBooking(userId, bookingId);
+    return {
+      status: result.status,
+      msg: result.msg,
+      data: result.data
+    };
+  } catch (error) {
+    console.error("Cancel booking error:", error);
+    return { status: 500, msg: "Failed to cancel booking", data: null };
+  }
+};
+
 
 export default {
   bookNow,
   getBookingById,
   getUserBookings,
-  acceptBooking
+  acceptBooking,
+  updateBookingStatus,
+  cancelBooking
 };
 

@@ -13,10 +13,30 @@ export const bookNow = async (userId, serviceId, bookingData) => {
       return { status: 400, msg: "User ID and Service ID are required", data: null };
     }
 
-    const { date, time, status = 'pending' } = bookingData;
+    const { date, time, status = 'pending', note } = bookingData;
 
-    if (!date || !time) {
-      return { status: 400, msg: "Date and time are required", data: null };
+    // Date and time are now optional (for instant bookings)
+    // Only validate if both are provided (scheduled booking)
+    if (date || time) {
+      if (!date || !time) {
+        return { status: 400, msg: "Both date and time are required if scheduling", data: null };
+      }
+
+      // Validate date format if provided
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) {
+        return { status: 400, msg: "Invalid date format", data: null };
+      }
+
+      // Check if date is in the future (if scheduling)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(dateObj);
+      selected.setHours(0, 0, 0, 0);
+
+      if (selected < today) {
+        return { status: 400, msg: "Booking date must be in the future", data: null };
+      }
     }
 
     // Get the profile ID from user ID (bookings.buyer_id references profiles.id)
@@ -60,15 +80,24 @@ export const bookNow = async (userId, serviceId, bookingData) => {
     }
 
     // Create the booking using profile.id (not userId)
+    // Date and time are optional (null for instant bookings)
+    const bookingDataToInsert = {
+      buyer_id: profile.id, // Use profile.id instead of userId
+      service_id: serviceId,
+      date: date || null, // Can be null for instant bookings
+      time: time || null, // Can be null for instant bookings
+      status: status,
+      // Payment fields - will be populated when payment API is ready
+      payment_status: null, // 'pending', 'captured', 'in_escrow', 'released', 'refunded'
+      payment_captured_at: null,
+      payment_released_at: null,
+      payment_amount: null,
+      payment_transaction_id: null,
+    };
+
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .insert({
-        buyer_id: profile.id, // Use profile.id instead of userId
-        service_id: serviceId,
-        date: date,
-        time: time,
-        status: status
-      })
+      .insert(bookingDataToInsert)
       .select()
       .single();
 
@@ -282,4 +311,102 @@ export const acceptBooking = async (userId, bookingId) => {
     console.error("acceptBooking error:", e);
     return { status: 500, msg: "Failed to accept booking", data: null };
   }
+};
+
+/**
+ * Update booking status
+ * @param {string} userId - User ID (buyer or seller)
+ * @param {string} bookingId - Booking ID
+ * @param {string} newStatus - New status ('accepted', 'in_progress', 'completed', 'cancelled')
+ * @returns {Promise<Object>} Updated booking
+ */
+export const updateBookingStatus = async (userId, bookingId, newStatus) => {
+  try {
+    if (!bookingId || !newStatus) {
+      return { status: 400, msg: "Booking ID and status are required", data: null };
+    }
+
+    // Valid statuses
+    const validStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+    if (!validStatuses.includes(newStatus)) {
+      return { status: 400, msg: `Invalid status. Must be one of: ${validStatuses.join(', ')}`, data: null };
+    }
+
+    // Get booking with service info
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('*, service:services(user_id)')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { status: 404, msg: "Booking not found", data: null };
+    }
+
+    // Check permissions
+    const isBuyer = booking.buyer_id === userId;
+    const isSeller = booking.service?.user_id === userId;
+
+    if (!isBuyer && !isSeller) {
+      return { status: 403, msg: "You do not have permission to update this booking", data: null };
+    }
+
+    // Validate status transitions
+    const currentStatus = booking.status;
+
+    // Seller can update: pending → accepted → in_progress → completed
+    if (isSeller) {
+      if (newStatus === 'accepted' && currentStatus !== 'pending') {
+        return { status: 400, msg: `Cannot accept booking with status: ${currentStatus}`, data: null };
+      }
+      if (newStatus === 'in_progress' && currentStatus !== 'accepted') {
+        return { status: 400, msg: `Cannot mark as in progress. Booking must be accepted first.`, data: null };
+      }
+      if (newStatus === 'completed' && currentStatus !== 'in_progress') {
+        return { status: 400, msg: `Cannot complete booking. Booking must be in progress first.`, data: null };
+      }
+    }
+
+    // Buyer or seller can cancel if status is pending or accepted
+    if (newStatus === 'cancelled') {
+      if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+        return { status: 400, msg: `Cannot cancel booking with status: ${currentStatus}`, data: null };
+      }
+      if (currentStatus === 'in_progress' && !isSeller) {
+        return { status: 403, msg: "Cannot cancel booking that is in progress. Contact the seller.", data: null };
+      }
+    }
+
+    // Cannot update from completed or cancelled
+    if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+      return { status: 400, msg: `Cannot update booking with status: ${currentStatus}`, data: null };
+    }
+
+    // Update status
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ status: newStatus })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error) {
+      return { status: 400, msg: error.message, data: null };
+    }
+
+    return { status: 200, msg: `Booking status updated to ${newStatus}`, data };
+  } catch (e) {
+    console.error("updateBookingStatus error:", e);
+    return { status: 500, msg: "Failed to update booking status", data: null };
+  }
+};
+
+/**
+ * Cancel booking (convenience method)
+ * @param {string} userId - User ID (buyer or seller)
+ * @param {string} bookingId - Booking ID
+ * @returns {Promise<Object>} Cancelled booking
+ */
+export const cancelBooking = async (userId, bookingId) => {
+  return await updateBookingStatus(userId, bookingId, 'cancelled');
 };

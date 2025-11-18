@@ -6,6 +6,82 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /**
+ * Maps technical error messages to user-friendly messages
+ */
+function getFriendlyErrorMessage(errorMessage: string, statusCode?: number): string {
+  if (!errorMessage) {
+    return 'Something went wrong. Please try again.';
+  }
+
+  const lowerMessage = errorMessage.toLowerCase();
+
+  // Authentication errors
+  if (lowerMessage.includes('invalid login credentials') || 
+      lowerMessage.includes('invalid email or password') ||
+      lowerMessage.includes('email not found') ||
+      (lowerMessage.includes('user') && lowerMessage.includes('not found'))) {
+    return 'The email or password you entered is incorrect. Please check and try again.';
+  }
+
+  if (lowerMessage.includes('wrong password')) {
+    return 'The password you entered is incorrect. Please try again.';
+  }
+
+  if (lowerMessage.includes('email not confirmed') || 
+      lowerMessage.includes('email not verified')) {
+    return 'Please verify your email address before signing in. Check your inbox for the verification link.';
+  }
+
+  // Email validation errors
+  if (lowerMessage.includes('invalid email') || 
+      lowerMessage.includes('email format') ||
+      lowerMessage.includes('email address')) {
+    return 'Please enter a valid email address.';
+  }
+
+  if (lowerMessage.includes('user already registered') || 
+      lowerMessage.includes('email already exists') ||
+      lowerMessage.includes('already registered')) {
+    return 'An account with this email already exists. Please sign in instead.';
+  }
+
+  // Password errors
+  if (lowerMessage.includes('password') && lowerMessage.includes('short')) {
+    return 'Password must be at least 6 characters long.';
+  }
+
+  // Address errors (if applicable)
+  if (lowerMessage.includes('address') && (lowerMessage.includes('invalid') || lowerMessage.includes('not found'))) {
+    return 'Please enter a valid address.';
+  }
+
+  // Network/server errors
+  if (statusCode === 401 || lowerMessage.includes('unauthorized')) {
+    return 'You are not authorized to perform this action. Please sign in.';
+  }
+
+  if (statusCode === 403 || lowerMessage.includes('forbidden')) {
+    return 'You do not have permission to perform this action.';
+  }
+
+  if (statusCode === 404 || lowerMessage.includes('not found')) {
+    return 'The requested resource was not found.';
+  }
+
+  if (statusCode === 500 || lowerMessage.includes('internal server error')) {
+    return 'A server error occurred. Please try again later.';
+  }
+
+  if (statusCode === 503 || lowerMessage.includes('service unavailable')) {
+    return 'The service is temporarily unavailable. Please try again later.';
+  }
+
+  // If it's already a user-friendly message, return as-is
+  // Otherwise, return the original message but cleaned up
+  return errorMessage;
+}
+
+/**
  * Generic API fetch wrapper with error handling
  */
 async function apiFetch<T>(
@@ -43,16 +119,39 @@ async function apiFetch<T>(
     const response = await fetch(url, config);
     
     if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        error: `HTTP ${response.status}: ${response.statusText}`,
-      }));
-      throw new Error(error.error || error.message || 'API request failed');
+      // Try to parse error response from backend
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch {
+        // If JSON parsing fails, create a basic error structure
+        errorData = { msg: `HTTP ${response.status}: ${response.statusText}` };
+      }
+
+      // Backend returns errors in format: { status, msg, data }
+      // Extract the user-friendly message
+      const errorMessage = errorData.msg || errorData.message || errorData.error;
+      
+      // Map common technical errors to user-friendly messages
+      const friendlyMessage = getFriendlyErrorMessage(errorMessage, response.status);
+      
+      throw new Error(friendlyMessage);
     }
 
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
+    // If it's already our formatted error, re-throw it
+    if (error.message && !error.message.includes('API request failed')) {
+      throw error;
+    }
+    
+    // Handle network errors and other edge cases
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Unable to connect to the server. Please check your internet connection.');
+    }
+    
     console.error('API Error:', error);
-    throw error;
+    throw new Error(error.message || 'Something went wrong. Please try again.');
   }
 }
 
@@ -141,7 +240,7 @@ export const api = {
 
   // Booking endpoints
   bookings: {
-    create: (data: { serviceId: string; date: string; time: string; status?: string }) =>
+    create: (data: { serviceId: string; date: string | null; time: string | null; status?: string; note?: string | null }) =>
       apiFetch('/bookings/book-now', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -152,6 +251,15 @@ export const api = {
       apiFetch(`/bookings?role=${role}`, { method: 'GET' }),
     accept: (bookingId: string) =>
       apiFetch(`/bookings/${bookingId}/accept`, {
+        method: 'PATCH',
+      }),
+    updateStatus: (bookingId: string, status: string) =>
+      apiFetch(`/bookings/${bookingId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    cancel: (bookingId: string) =>
+      apiFetch(`/bookings/${bookingId}/cancel`, {
         method: 'PATCH',
       }),
   },

@@ -33,5 +33,21 @@ router.get('/', verifyToken, responseHandler(bookingController.getUserBookings))
  * @access  Private (seller)
  */
 router.patch('/:bookingId/accept', verifyToken, responseHandler(bookingController.acceptBooking));
+
+/**
+ * @route   PATCH /api/bookings/:bookingId/status
+ * @desc    Update booking status
+ * @access  Private (buyer or seller)
+ * @body    { status: 'accepted' | 'in_progress' | 'completed' | 'cancelled' }
+ */
+router.patch('/:bookingId/status', verifyToken, responseHandler(bookingController.updateBookingStatus));
+
+/**
+ * @route   PATCH /api/bookings/:bookingId/cancel
+ * @desc    Cancel a booking (buyer or seller)
+ * @access  Private (buyer or seller)
+ */
+router.patch('/:bookingId/cancel', verifyToken, responseHandler(bookingController.cancelBooking));
+
 export default router;
 

@@ -22,9 +22,9 @@ interface Booking {
   id: string;
   buyer_id: string;
   service_id: string;
-  date: string;
-  time: string;
-  status: "pending" | "accepted" | "in_progress" | "completed";
+  date: string | null;
+  time: string | null;
+  status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
   created_at: string;
   buyer?: {
     first_name: string | null;
@@ -212,8 +212,14 @@ export default function SellerBookings() {
                           <TableCell>{getBuyerName(booking)}</TableCell>
                           <TableCell>{booking.service?.title || 'Unknown Service'}</TableCell>
                           <TableCell className="text-muted-foreground">
-                            {new Date(booking.date).toLocaleDateString()}<br />
-                            <span className="text-xs">{booking.time}</span>
+                            {booking.date && booking.time ? (
+                              <>
+                                {new Date(booking.date).toLocaleDateString()}<br />
+                                <span className="text-xs">{booking.time}</span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Instant booking</span>
+                            )}
                           </TableCell>
                           <TableCell className="font-medium">
                             {booking.service?.default_price ? `GH₵ ${booking.service.default_price.toFixed(2)}` : 'N/A'}
@@ -228,10 +234,7 @@ export default function SellerBookings() {
                               variant="ghost" 
                               size="sm" 
                               className="gap-2"
-                              onClick={() => {
-                                // Navigate to booking detail page if it exists
-                                toast.info('Booking detail view coming soon');
-                              }}
+                              onClick={() => navigate(`/booking/${booking.id}`)}
                             >
                               <Eye className="h-4 w-4" />
                               View
