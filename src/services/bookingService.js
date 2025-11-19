@@ -79,6 +79,29 @@ export const bookNow = async (userId, serviceId, bookingData) => {
       return { status: 403, msg: "Cannot book your own service", data: null };
     }
 
+    // Check for existing active bookings for the same buyer and service
+    // Only one active booking per buyer per service is allowed at any time
+    // Active bookings are those that are not 'completed' or 'cancelled'
+    const { data: existingBookings, error: checkError } = await supabase
+      .from('bookings')
+      .select('id, status, date, time')
+      .eq('buyer_id', profile.id)
+      .eq('service_id', serviceId)
+      .in('status', ['pending', 'accepted', 'in_progress']);
+
+    if (checkError) {
+      console.error("Error checking for existing bookings:", checkError);
+      return { status: 500, msg: "Failed to validate booking availability", data: null };
+    }
+
+    if (existingBookings && existingBookings.length > 0) {
+      return { 
+        status: 409, 
+        msg: "You already have an active booking for this service. Please complete or cancel your existing booking before creating a new one.", 
+        data: null 
+      };
+    }
+
     // Create the booking using profile.id (not userId)
     // Date and time are optional (null for instant bookings)
     const bookingDataToInsert = {
@@ -327,7 +350,7 @@ export const updateBookingStatus = async (userId, bookingId, newStatus) => {
     }
 
     // Valid statuses
-    const validStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'accepted', 'in_progress', 'delivered', 'completed', 'cancelled'];
     if (!validStatuses.includes(newStatus)) {
       return { status: 400, msg: `Invalid status. Must be one of: ${validStatuses.join(', ')}`, data: null };
     }
@@ -354,7 +377,7 @@ export const updateBookingStatus = async (userId, bookingId, newStatus) => {
     // Validate status transitions
     const currentStatus = booking.status;
 
-    // Seller can update: pending → accepted → in_progress → completed
+    // Seller can update: pending → accepted → in_progress → delivered
     if (isSeller) {
       if (newStatus === 'accepted' && currentStatus !== 'pending') {
         return { status: 400, msg: `Cannot accept booking with status: ${currentStatus}`, data: null };
@@ -362,8 +385,23 @@ export const updateBookingStatus = async (userId, bookingId, newStatus) => {
       if (newStatus === 'in_progress' && currentStatus !== 'accepted') {
         return { status: 400, msg: `Cannot mark as in progress. Booking must be accepted first.`, data: null };
       }
-      if (newStatus === 'completed' && currentStatus !== 'in_progress') {
-        return { status: 400, msg: `Cannot complete booking. Booking must be in progress first.`, data: null };
+      if (newStatus === 'delivered' && currentStatus !== 'in_progress') {
+        return { status: 400, msg: `Cannot mark as delivered. Booking must be in progress first.`, data: null };
+      }
+      // Sellers cannot directly mark as completed - buyer must confirm
+      if (newStatus === 'completed' && isSeller) {
+        return { status: 403, msg: `Sellers cannot mark booking as completed. The buyer must confirm completion.`, data: null };
+      }
+    }
+
+    // Buyer can only confirm delivery (delivered → completed)
+    if (isBuyer) {
+      if (newStatus === 'completed' && currentStatus !== 'delivered') {
+        return { status: 400, msg: `Cannot confirm completion. Booking must be marked as delivered by the seller first.`, data: null };
+      }
+      // Buyers cannot set other statuses
+      if (newStatus !== 'completed' && newStatus !== 'cancelled') {
+        return { status: 403, msg: `Buyers can only confirm completion or cancel bookings.`, data: null };
       }
     }
 
@@ -374,6 +412,9 @@ export const updateBookingStatus = async (userId, bookingId, newStatus) => {
       }
       if (currentStatus === 'in_progress' && !isSeller) {
         return { status: 403, msg: "Cannot cancel booking that is in progress. Contact the seller.", data: null };
+      }
+      if (currentStatus === 'delivered' && !isSeller) {
+        return { status: 403, msg: "Cannot cancel booking that has been delivered. Please confirm or dispute the delivery.", data: null };
       }
     }
 
@@ -394,10 +435,74 @@ export const updateBookingStatus = async (userId, bookingId, newStatus) => {
       return { status: 400, msg: error.message, data: null };
     }
 
+    // If buyer is confirming completion (delivered → completed), release payment
+    if (newStatus === 'completed' && currentStatus === 'delivered' && isBuyer) {
+      // Import payment service dynamically to avoid circular dependencies
+      const { releasePayment } = await import('./paymentService.js');
+      const releaseResult = await releasePayment(bookingId);
+      
+      if (releaseResult.status === 200) {
+        // Update payment status in booking
+        await supabase
+          .from('bookings')
+          .update({ 
+            payment_status: 'released',
+            payment_released_at: new Date().toISOString()
+          })
+          .eq('id', bookingId);
+      }
+    }
+
     return { status: 200, msg: `Booking status updated to ${newStatus}`, data };
   } catch (e) {
     console.error("updateBookingStatus error:", e);
     return { status: 500, msg: "Failed to update booking status", data: null };
+  }
+};
+
+/**
+ * Confirm booking completion (buyer only)
+ * This moves the booking from 'delivered' to 'completed' and releases payment
+ * @param {string} userId - Buyer's user ID
+ * @param {string} bookingId - Booking ID
+ * @returns {Promise<Object>} Confirmed booking
+ */
+export const confirmBookingCompletion = async (userId, bookingId) => {
+  try {
+    if (!bookingId) {
+      return { status: 400, msg: "Booking ID is required", data: null };
+    }
+
+    // Get booking with service info
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('*, service:services(user_id)')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingError || !booking) {
+      return { status: 404, msg: "Booking not found", data: null };
+    }
+
+    // Verify user is the buyer
+    if (booking.buyer_id !== userId) {
+      return { status: 403, msg: "Only the buyer can confirm booking completion", data: null };
+    }
+
+    // Check if booking is in 'delivered' status
+    if (booking.status !== 'delivered') {
+      return { 
+        status: 400, 
+        msg: `Cannot confirm completion. Booking must be marked as delivered by the seller first. Current status: ${booking.status}`, 
+        data: null 
+      };
+    }
+
+    // Update to completed status (this will trigger payment release in updateBookingStatus)
+    return await updateBookingStatus(userId, bookingId, 'completed');
+  } catch (e) {
+    console.error("confirmBookingCompletion error:", e);
+    return { status: 500, msg: "Failed to confirm booking completion", data: null };
   }
 };
 

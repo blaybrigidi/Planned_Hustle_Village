@@ -287,6 +287,10 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       }),
+    confirm: (bookingId: string) =>
+      apiFetch(`/bookings/${bookingId}/confirm`, {
+        method: 'PATCH',
+      }),
     cancel: (bookingId: string) =>
       apiFetch(`/bookings/${bookingId}/cancel`, {
         method: 'PATCH',
@@ -304,6 +308,19 @@ export const api = {
       apiFetch(`/requests/${requestId}/accept`, {
         method: 'PATCH',
       }),
+  },
+
+  // Review endpoints
+  reviews: {
+    create: (bookingId: string, data: { rating: number; review_text?: string }) =>
+      apiFetch(`/reviews/booking/${bookingId}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getSellerReviews: (sellerId: string) =>
+      apiFetch(`/reviews/seller/${sellerId}`, { method: 'GET' }),
+    checkExisting: (bookingId: string) =>
+      apiFetch(`/reviews/booking/${bookingId}/check`, { method: 'GET' }),
   },
 
   // Health check

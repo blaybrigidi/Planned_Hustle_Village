@@ -177,6 +177,34 @@ const updateBookingStatus = async (req) => {
 };
 
 /**
+ * Confirm booking completion (buyer only)
+ * Moves booking from 'delivered' to 'completed' and releases payment
+ */
+const confirmBookingCompletion = async (req) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return { status: 401, msg: "Unauthorized: user not found", data: null };
+    }
+
+    const { bookingId } = req.params;
+    if (!bookingId) {
+      return { status: 400, msg: "Booking ID is required", data: null };
+    }
+
+    const result = await bookingService.confirmBookingCompletion(userId, bookingId);
+    return {
+      status: result.status,
+      msg: result.msg,
+      data: result.data
+    };
+  } catch (error) {
+    console.error("Confirm booking completion error:", error);
+    return { status: 500, msg: "Failed to confirm booking completion", data: null };
+  }
+};
+
+/**
  * Cancel booking
  */
 const cancelBooking = async (req) => {
@@ -210,6 +238,7 @@ export default {
   getUserBookings,
   acceptBooking,
   updateBookingStatus,
+  confirmBookingCompletion,
   cancelBooking
 };
 

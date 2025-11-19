@@ -21,7 +21,7 @@ export type Database = {
           service_id: string
           date: string | null
           time: string | null
-          status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled"
+          status: "pending" | "accepted" | "in_progress" | "delivered" | "completed" | "cancelled"
           created_at: string | null
           payment_status: string | null
           payment_captured_at: string | null
@@ -35,7 +35,7 @@ export type Database = {
           service_id: string
           date?: string | null
           time?: string | null
-          status?: "pending" | "accepted" | "in_progress" | "completed" | "cancelled"
+          status?: "pending" | "accepted" | "in_progress" | "delivered" | "completed" | "cancelled"
           created_at?: string | null
           payment_status?: string | null
           payment_captured_at?: string | null
@@ -49,7 +49,7 @@ export type Database = {
           service_id?: string
           date?: string | null
           time?: string | null
-          status?: "pending" | "accepted" | "in_progress" | "completed" | "cancelled"
+          status?: "pending" | "accepted" | "in_progress" | "delivered" | "completed" | "cancelled"
           created_at?: string | null
           payment_status?: string | null
           payment_captured_at?: string | null

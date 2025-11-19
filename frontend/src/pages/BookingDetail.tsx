@@ -19,7 +19,9 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Star,
 } from "lucide-react";
+import { ReviewForm } from "@/components/reviews/ReviewForm";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +40,7 @@ interface Booking {
   service_id: string;
   date: string | null;
   time: string | null;
-  status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
+  status: "pending" | "accepted" | "in_progress" | "delivered" | "completed" | "cancelled";
   created_at: string;
   payment_status?: string | null;
   payment_captured_at?: string | null;
@@ -72,6 +74,7 @@ const getStatusBadge = (status: string) => {
     pending: "default",
     accepted: "secondary",
     in_progress: "secondary",
+    delivered: "default",
     completed: "outline",
     cancelled: "destructive",
   };
@@ -83,6 +86,7 @@ const getStatusLabel = (status: string) => {
     pending: "Pending",
     accepted: "Accepted",
     in_progress: "In Progress",
+    delivered: "Delivered - Awaiting Your Confirmation",
     completed: "Completed",
     cancelled: "Cancelled",
   };
@@ -96,12 +100,35 @@ export default function BookingDetail() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [hasReview, setHasReview] = useState<boolean | null>(null);
+  const [checkingReview, setCheckingReview] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   useEffect(() => {
     if (id && user) {
       fetchBookingDetails();
     }
   }, [id, user]);
+
+  useEffect(() => {
+    // Check if user has already reviewed when booking is completed
+    if (booking && booking.status === "completed" && booking.buyer_id === user?.id && user && id) {
+      const checkReview = async () => {
+        try {
+          setCheckingReview(true);
+          const result = await api.reviews.checkExisting(id) as any;
+          if (result.status === 200) {
+            setHasReview(result.data?.hasReview || false);
+          }
+        } catch (error: any) {
+          console.error("Error checking for existing review:", error);
+        } finally {
+          setCheckingReview(false);
+        }
+      };
+      checkReview();
+    }
+  }, [booking?.status, booking?.buyer_id, user?.id, user, id]);
 
   const fetchBookingDetails = async () => {
     if (!id) return;
@@ -219,6 +246,56 @@ export default function BookingDetail() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const checkExistingReview = async () => {
+    if (!id || !user) return;
+
+    try {
+      setCheckingReview(true);
+      const result = await api.reviews.checkExisting(id) as any;
+
+      if (result.status === 200) {
+        setHasReview(result.data?.hasReview || false);
+      }
+    } catch (error: any) {
+      console.error("Error checking for existing review:", error);
+    } finally {
+      setCheckingReview(false);
+    }
+  };
+
+  const handleConfirmCompletion = async () => {
+    if (!booking || !id) return;
+
+    try {
+      setUpdating(true);
+      const result = await (api.bookings as any).confirm?.(id) as any;
+
+      if (!result) {
+        toast.error("Confirmation endpoint not available");
+        return;
+      }
+
+      if (result.status === 200) {
+        toast.success("Booking confirmed! Payment has been released to the seller.");
+        fetchBookingDetails();
+        // Check for existing review after completion
+        setTimeout(() => checkExistingReview(), 500);
+      } else {
+        toast.error(result.msg || "Failed to confirm booking completion");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to confirm booking completion");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleReviewSuccess = () => {
+    setHasReview(true);
+    setShowReviewForm(false);
+    fetchBookingDetails(); // Refresh to show the review
   };
 
   const handleCancel = async () => {
@@ -547,7 +624,7 @@ export default function BookingDetail() {
 
                   {isSeller && booking.status === "in_progress" && (
                     <Button
-                      onClick={() => handleStatusUpdate("completed")}
+                      onClick={() => handleStatusUpdate("delivered")}
                       disabled={updating}
                       className="w-full"
                     >
@@ -559,10 +636,41 @@ export default function BookingDetail() {
                       ) : (
                         <>
                           <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Mark as Completed
+                          Mark as Delivered
                         </>
                       )}
                     </Button>
+                  )}
+
+                  {/* Buyer confirmation when delivered */}
+                  {isBuyer && booking.status === "delivered" && (
+                    <div className="space-y-3">
+                      <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                          Service Delivered
+                        </p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          The seller has marked this service as delivered. Please review and confirm if you're satisfied. Payment will be released upon your confirmation.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleConfirmCompletion}
+                        disabled={updating}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                      >
+                        {updating ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Confirm Completion & Release Payment
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   )}
 
                   {/* Buyer/Seller Cancel Actions */}
@@ -608,15 +716,65 @@ export default function BookingDetail() {
                       </AlertDialog>
                     )}
 
+                  {/* Delivered Status (Seller view) */}
+                  {isSeller && booking.status === "delivered" && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800 text-center">
+                      <CheckCircle2 className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        Awaiting Buyer Confirmation
+                      </p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        The buyer will confirm completion to release payment
+                      </p>
+                    </div>
+                  )}
+
                   {/* Completed Status */}
                   {booking.status === "completed" && (
-                    <div className="p-4 bg-muted rounded-md text-center">
-                      <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                      <p className="text-sm font-medium">Booking Completed</p>
-                      {isBuyer && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-muted rounded-md text-center">
+                        <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                        <p className="text-sm font-medium">Booking Completed</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          You can now leave a review
+                          Payment has been released to the seller
                         </p>
+                      </div>
+
+                      {/* Review Section for Buyers */}
+                      {isBuyer && (
+                        <div>
+                          {checkingReview ? (
+                            <div className="p-4 bg-muted rounded-md text-center">
+                              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                              <p className="text-xs text-muted-foreground">Checking review status...</p>
+                            </div>
+                          ) : hasReview ? (
+                            <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-md border border-green-200 dark:border-green-800 text-center">
+                              <Star className="h-6 w-6 text-green-500 mx-auto mb-2 fill-green-500" />
+                              <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                                Review Submitted
+                              </p>
+                              <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                                Thank you for your feedback!
+                              </p>
+                            </div>
+                          ) : showReviewForm ? (
+                            <ReviewForm
+                              bookingId={id}
+                              onSuccess={handleReviewSuccess}
+                              onCancel={() => setShowReviewForm(false)}
+                            />
+                          ) : (
+                            <Button
+                              onClick={() => setShowReviewForm(true)}
+                              className="w-full"
+                              variant="outline"
+                            >
+                              <Star className="mr-2 h-4 w-4" />
+                              Leave a Review
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}

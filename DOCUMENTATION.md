@@ -157,8 +157,13 @@ The platform is built with:
 - `service_id` (UUID, Foreign Key → services.id)
 - `date` (date)
 - `time` (time)
-- `status` (text: 'pending', 'accepted', 'in_progress', 'completed')
+- `status` (text: 'pending', 'accepted', 'in_progress', 'delivered', 'completed', 'cancelled')
 - `created_at` (timestamp)
+- `payment_status` (text, nullable)
+- `payment_captured_at` (timestamp, nullable)
+- `payment_released_at` (timestamp, nullable)
+- `payment_amount` (numeric, nullable)
+- `payment_transaction_id` (text, nullable)
 
 #### `reviews`
 - `id` (UUID, Primary Key)

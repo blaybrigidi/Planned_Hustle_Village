@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes.js';
 import sellerRoutes from './routes/sellerRoutes.js';
 import serviceRoutes from './routes/servicesRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import requestRoutes from './routes/requestRoutes.js';
 
@@ -33,6 +34,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api/requests', requestRoutes);
 
 // Error handling middleware (must be last)

@@ -38,9 +38,17 @@ router.patch('/:bookingId/accept', verifyToken, responseHandler(bookingControlle
  * @route   PATCH /api/bookings/:bookingId/status
  * @desc    Update booking status
  * @access  Private (buyer or seller)
- * @body    { status: 'accepted' | 'in_progress' | 'completed' | 'cancelled' }
+ * @body    { status: 'accepted' | 'in_progress' | 'delivered' | 'completed' | 'cancelled' }
  */
 router.patch('/:bookingId/status', verifyToken, responseHandler(bookingController.updateBookingStatus));
+
+/**
+ * @route   PATCH /api/bookings/:bookingId/confirm
+ * @desc    Confirm booking completion (buyer only)
+ * @desc    Moves booking from 'delivered' to 'completed' and releases payment
+ * @access  Private (buyer only)
+ */
+router.patch('/:bookingId/confirm', verifyToken, responseHandler(bookingController.confirmBookingCompletion));
 
 /**
  * @route   PATCH /api/bookings/:bookingId/cancel

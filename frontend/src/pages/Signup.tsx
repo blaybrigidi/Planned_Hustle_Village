@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Navbar } from '@/components/landing/Navbar';
+import { Footer } from '@/components/landing/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -254,8 +256,10 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
-      <Card className="w-full max-w-2xl">
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-1 flex items-center justify-center bg-background px-4 py-8">
+        <Card className="w-full max-w-2xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">
             {step === 1 ? 'Create an account' : 'Tell us about your service'}
@@ -631,6 +635,8 @@ const Signup = () => {
           </div>
         </CardContent>
       </Card>
+      </main>
+      <Footer />
     </div>
   );
 };

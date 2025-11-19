@@ -24,7 +24,7 @@ interface Booking {
   service_id: string;
   date: string | null;
   time: string | null;
-  status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
+  status: "pending" | "accepted" | "in_progress" | "delivered" | "completed" | "cancelled";
   created_at: string;
   buyer?: {
     first_name: string | null;
@@ -41,6 +41,7 @@ const getStatusBadge = (status: string) => {
     pending: "default",
     accepted: "secondary",
     in_progress: "secondary",
+    delivered: "default",
     completed: "outline",
     cancelled: "destructive",
   };
