@@ -106,8 +106,6 @@ async function apiFetch<T>(
     
     if (session?.access_token) {
       (defaultHeaders as any)['Authorization'] = `Bearer ${session.access_token}`;
-    } else {
-      console.warn('No valid session token available for API request');
     }
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -124,16 +122,6 @@ async function apiFetch<T>(
   try {
     const response = await fetch(url, config);
     
-    // Log response for debugging (only in development)
-    if (import.meta.env.DEV) {
-      console.log('API Request:', {
-        url,
-        method: options.method || 'GET',
-        hasAuth: !!(config.headers as any)?.['Authorization'],
-        status: response.status,
-      });
-    }
-    
     if (!response.ok) {
       // Try to parse error response from backend
       let errorData: any;
@@ -142,11 +130,6 @@ async function apiFetch<T>(
       } catch {
         // If JSON parsing fails, create a basic error structure
         errorData = { msg: `HTTP ${response.status}: ${response.statusText}` };
-      }
-
-      // Log error for debugging
-      if (import.meta.env.DEV) {
-        console.error('API Error Response:', errorData);
       }
 
       // Backend returns errors in format: { status, msg, data }

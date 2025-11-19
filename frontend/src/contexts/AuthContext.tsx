@@ -60,27 +60,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     service?: any;
   }) => {
     try {
-      console.log('📝 Signing up via backend...');
-      
-      // Call backend signup endpoint
+;      // Call backend signup endpoint
       const response = await api.auth.signup({
         email: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
         phoneNumber: data.phoneNumber,
-        role: data.role, // Send buyer, seller, or both directly
+        role: data.role, // Send buyer or seller
       }) as any;
 
       if (response.status !== 201) {
         return { error: { message: response.msg || 'Signup failed' } };
       }
 
-      console.log('✅ Signup successful, user created:', response.data);
-
       // If user is a seller and has service data, create the service after signup
-      if (data.service && (data.role === 'seller' || data.role === 'both')) {
-        console.log('🛠️ Creating service for seller...');
+      if (data.service && data.role === 'seller') {
         
         // Note: Service creation requires authentication, so we'll need to handle this
         // after email verification. For now, we'll store it in localStorage to create after verification
@@ -99,8 +94,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      console.log('🔐 Logging in via backend...');
-      
       // Call backend login endpoint
       const response = await api.auth.login(email, password) as any;
 

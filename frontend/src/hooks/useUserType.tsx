@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-type UserType = 'buyer' | 'seller' | 'both' | null;
+type UserType = 'buyer' | 'seller' | null;
 
 export const useUserType = () => {
   const { user } = useAuth();
@@ -25,7 +25,7 @@ export const useUserType = () => {
           .single();
 
         if (error) throw error;
-        // Use role directly (buyer, seller, or both)
+        // Use role directly (buyer or seller)
         const role = data?.role || null;
         setUserType(role as any);
       } catch (error) {
@@ -39,8 +39,8 @@ export const useUserType = () => {
     fetchUserType();
   }, [user]);
 
-  const canListServices = userType === 'seller' || userType === 'both';
-  const canBookServices = userType === 'buyer' || userType === 'both';
+  const canListServices = userType === 'seller';
+  const canBookServices = userType === 'buyer';
 
   return { userType, loading, canListServices, canBookServices };
 };

@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Menu, User, LogOut, Package, Calendar } from "lucide-react";
+import { Menu, User, LogOut, Package, Calendar, MessageSquare } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useUserType } from "@/hooks/useUserType";
 import { supabase } from "@/integrations/supabase/client";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +22,7 @@ export const Navbar = () => {
   const { user, signOut } = useAuth();
   const { canListServices } = useUserType();
   const navigate = useNavigate();
+  const unreadCount = useUnreadCount();
   const [userProfile, setUserProfile] = useState<{ first_name: string | null; last_name: string | null } | null>(null);
 
   useEffect(() => {
@@ -86,6 +89,22 @@ export const Navbar = () => {
           <div className="hidden md:flex items-center gap-4">
             {user ? (
               <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative"
+                  onClick={() => navigate('/messages')}
+                >
+                  <MessageSquare className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                    >
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Badge>
+                  )}
+                </Button>
                 {canListServices && (
                   <Button variant="outline" onClick={() => navigate('/list-service')}>
                     List a Service
@@ -111,6 +130,15 @@ export const Navbar = () => {
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
                       <User className="mr-2 h-4 w-4" />
                       Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/messages')}>
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Messages
+                      {unreadCount > 0 && (
+                        <Badge variant="destructive" className="ml-auto">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </Badge>
+                      )}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/my-bookings')}>
                       <Calendar className="mr-2 h-4 w-4" />
@@ -177,6 +205,15 @@ export const Navbar = () => {
                     <Button variant="ghost" className="w-full" onClick={() => navigate('/profile')}>
                       <User className="mr-2 h-4 w-4" />
                       Profile
+                    </Button>
+                    <Button variant="ghost" className="w-full relative" onClick={() => navigate('/messages')}>
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Messages
+                      {unreadCount > 0 && (
+                        <Badge variant="destructive" className="ml-auto">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </Badge>
+                      )}
                     </Button>
                     <Button variant="ghost" className="w-full" onClick={() => navigate('/my-bookings')}>
                       <Calendar className="mr-2 h-4 w-4" />

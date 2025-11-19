@@ -138,12 +138,11 @@ const VerifyEmail = () => {
       // Validate session with backend (use backend endpoint)
       try {
         const userResponse = await api.auth.getMe() as any;
-        if (userResponse.status === 200) {
-          console.log('✅ Backend validated user:', userResponse.data);
+        if (userResponse.status !== 200) {
+          // Backend validation failed, but continue
         }
       } catch (error) {
-        console.warn('⚠️ Backend validation failed, but continuing:', error);
-        // Continue even if backend validation fails
+        // Backend validation failed, but continue
       }
 
       await handleServiceCreation();

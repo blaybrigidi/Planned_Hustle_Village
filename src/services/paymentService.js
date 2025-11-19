@@ -43,9 +43,7 @@ export const capturePayment = async (bookingId, amount, currency = 'GHS') => {
     };
     */
 
-    // STUB: For now, just log and return success
-    console.log(`[PAYMENT STUB] Would capture payment of ${currency} ${amount} for booking ${bookingId}`);
-    
+    // STUB: For now, return success without actual payment processing
     return {
       status: 200,
       msg: "Payment captured (stub - not actually charged)",
@@ -99,9 +97,7 @@ export const releasePayment = async (bookingId) => {
     };
     */
 
-    // STUB: For now, just log and return success
-    console.log(`[PAYMENT STUB] Would release payment for booking ${bookingId}`);
-    
+    // STUB: For now, return success without actual payment processing
     return {
       status: 200,
       msg: "Payment released (stub - not actually released)",
@@ -155,9 +151,7 @@ export const refundPayment = async (bookingId, reason = 'Cancelled by user') => 
     };
     */
 
-    // STUB: For now, just log and return success
-    console.log(`[PAYMENT STUB] Would refund payment for booking ${bookingId}, reason: ${reason}`);
-    
+    // STUB: For now, return success without actual payment processing
     return {
       status: 200,
       msg: "Payment refunded (stub - not actually refunded)",

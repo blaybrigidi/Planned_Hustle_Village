@@ -94,7 +94,6 @@ export const BecomeAHustler = () => {
       // Fetch all stats in parallel
       const [
         sellerRoleResult,
-        bothRoleResult,
         servicesResult,
         bookingsResult,
         reviewsResult
@@ -104,12 +103,6 @@ export const BecomeAHustler = () => {
           .from('profiles')
           .select('id')
           .eq('role', 'seller'),
-        
-        // Fetch users with 'both' role
-        supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'both'),
         
         // Count active services and get user IDs
         supabase
@@ -142,9 +135,6 @@ export const BecomeAHustler = () => {
       
       // Add users with seller role
       sellerRoleResult.data?.forEach(p => hustlerIds.add(p.id));
-      
-      // Add users with both role
-      bothRoleResult.data?.forEach(p => hustlerIds.add(p.id));
       
       // Add users who have active services (covers cases where role might not be set)
       const serviceUserIds = servicesResult.data?.map(s => s.user_id) || [];

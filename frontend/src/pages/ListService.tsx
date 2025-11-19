@@ -134,7 +134,7 @@ const ListService = () => {
           return;
         }
       } catch (apiError) {
-        console.log('Backend API not available or doesn\'t support image_urls, creating directly in Supabase');
+        // Backend API not available, fallback to direct Supabase creation
       }
 
       // Fallback: Create directly in Supabase

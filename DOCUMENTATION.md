@@ -8,6 +8,7 @@
 5. [What's Working](#whats-working)
 6. [Known Issues](#known-issues)
 7. [Next Steps](#next-steps)
+8. [Feature Status Summary](#-feature-status-summary)
 
 ---
 
@@ -16,7 +17,6 @@
 **Hustle Village** is a student marketplace platform where students can:
 - **Buyers**: Find and book services from other students
 - **Sellers**: List and offer services to other students
-- **Both**: Users can be both buyers and sellers
 
 The platform is built with:
 - **Frontend**: React + TypeScript + Vite
@@ -29,7 +29,7 @@ The platform is built with:
 ## ✨ Current Features
 
 ### 1. **Authentication & User Management**
-- ✅ User signup with role selection (buyer, seller, both)
+- ✅ User signup with role selection (buyer or seller)
 - ✅ Email verification flow
 - ✅ Login/Logout functionality
 - ✅ User profile management
@@ -111,6 +111,19 @@ The platform is built with:
 - ✅ User menu dropdown
 - ✅ Role-based navigation items
 - ✅ Protected routes
+- ✅ Messages link with unread count badge
+
+### 8. **Messaging System** ⭐ NEW
+- ✅ Real-time messaging with Supabase Realtime
+- ✅ Conversation list with last message preview
+- ✅ Chat window with message history
+- ✅ Send and receive messages in real-time
+- ✅ Unread message count badges
+- ✅ Chat header showing recipient name
+- ✅ Auto-scroll to latest messages
+- ✅ Message timestamps
+- ✅ Create conversations from service pages
+- ✅ Portfolio requirement validation (at least one field required for sellers)
 
 ---
 
@@ -123,7 +136,7 @@ The platform is built with:
 - `first_name` (text, nullable)
 - `last_name` (text, nullable)
 - `phone` (text, nullable)
-- `role` (text: 'buyer', 'seller', 'both')
+- `role` (text: 'buyer', 'seller')
 - `profile_pic` (text, nullable)
 - `created_at` (timestamp)
 
@@ -174,6 +187,27 @@ The platform is built with:
 - `review_text` (text, nullable)
 - `created_at` (timestamp)
 
+#### `conversations`
+- `id` (UUID, Primary Key)
+- `participant1_id` (UUID, Foreign Key → profiles.id)
+- `participant2_id` (UUID, Foreign Key → profiles.id)
+- `service_id` (UUID, Foreign Key → services.id, nullable)
+- `last_message_at` (timestamptz, nullable)
+- `created_at` (timestamptz)
+- `updated_at` (timestamptz, nullable)
+- Unique constraint on (participant1_id, participant2_id, service_id)
+
+#### `messages`
+- `id` (UUID, Primary Key)
+- `conversation_id` (UUID, Foreign Key → conversations.id)
+- `sender_id` (UUID, Foreign Key → profiles.id)
+- `content` (text, max 5000 characters)
+- `is_read` (boolean, default false)
+- `read_at` (timestamptz, nullable)
+- `created_at` (timestamptz)
+
+**Note**: Realtime is enabled for both `conversations` and `messages` tables for live updates.
+
 ---
 
 ## 📁 Frontend Structure
@@ -197,12 +231,20 @@ frontend/
 │   │   │   └── Footer.tsx
 │   │   ├── services/           # Service-related components
 │   │   │   └── ServiceCard.tsx
+│   │   ├── messages/           # Messaging components
+│   │   │   ├── ConversationList.tsx
+│   │   │   ├── ChatWindow.tsx
+│   │   │   └── Message.tsx
 │   │   └── ui/                  # shadcn/ui components
 │   ├── contexts/
 │   │   └── AuthContext.tsx      # Authentication context
 │   ├── hooks/
 │   │   ├── useCategories.ts     # Categories hook
-│   │   └── useUserType.ts       # User type hook
+│   │   ├── useUserType.ts       # User type hook
+│   │   ├── useMessages.ts       # Messages hook with Realtime
+│   │   ├── useConversations.ts # Conversations list hook
+│   │   ├── useConversation.ts  # Get/create conversation hook
+│   │   └── useUnreadCount.ts   # Unread message count hook
 │   ├── integrations/
 │   │   └── supabase/
 │   │       └── client.ts        # Supabase client
@@ -218,6 +260,7 @@ frontend/
 │   │   ├── ServiceDetail.tsx    # Service detail page
 │   │   ├── SellerProfile.tsx    # Public seller profile
 │   │   ├── ListService.tsx      # Create service (public)
+│   │   ├── Messages.tsx         # Messaging page
 │   │   └── seller/              # Seller dashboard pages
 │   │       ├── SellerDashboard.tsx
 │   │       ├── SellerServices.tsx
@@ -270,6 +313,15 @@ frontend/
    - ✅ Reviews from database
    - ✅ User profiles from database
 
+7. **Messaging System**
+   - ✅ Real-time messaging with Supabase Realtime
+   - ✅ Conversation management
+   - ✅ Message sending and receiving
+   - ✅ Unread message tracking
+   - ✅ Chat interface with scrollable message history
+   - ✅ Conversation list with last message preview
+   - ✅ Create conversations from service pages
+
 ---
 
 ## ⚠️ Known Issues
@@ -291,8 +343,9 @@ frontend/
    - ⚠️ Service images not implemented (using placeholders)
    - ⚠️ Image upload functionality missing
 
-5. **Messaging**
-   - ⚠️ "Message Seller" button exists but not functional
+5. **Email Notifications**
+   - ⚠️ Email notifications for new messages removed (can be re-implemented later)
+   - ⚠️ Requires SMTP configuration and tunnel service (ngrok/cloudflare) for local development
 
 6. **Email Verification**
    - ⚠️ Email verification flow exists but may need SMTP configuration
@@ -326,11 +379,12 @@ frontend/
 
 ### Priority 2: Enhanced Features
 
-#### 4. **Messaging System**
-- [ ] Create messaging/chat system
-- [ ] Add real-time messaging (Supabase Realtime)
-- [ ] Implement message notifications
-- [ ] Add message history
+#### 4. **Email Notifications** (Previously removed, can be re-implemented)
+- [ ] Re-implement email notifications for new messages
+- [ ] Set up SMTP service (Gmail, SendGrid, Mailgun, etc.)
+- [ ] Configure database trigger to call backend API
+- [ ] Use tunnel service (ngrok/cloudflare) or deploy backend for production
+- [ ] Add email notification preferences
 
 #### 5. **Profile Enhancements**
 - [ ] Add bio field to profiles table
@@ -354,11 +408,12 @@ frontend/
 - [ ] Implement saved searches
 - [ ] Add search suggestions
 
-#### 8. **Notifications**
-- [ ] Implement notification system
-- [ ] Add email notifications
-- [ ] Add in-app notifications
+#### 8. **In-App Notifications**
+- [ ] Implement in-app notification system
+- [ ] Add notification bell/indicator
+- [ ] Show notifications for new messages, bookings, etc.
 - [ ] Add notification preferences
+- [ ] Mark notifications as read
 
 #### 9. **Mobile Optimization**
 - [ ] Optimize for mobile devices
@@ -429,14 +484,43 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 - **buyer**: Can book services, leave reviews
 - **seller**: Can create services, manage bookings
-- **both**: Can do both buyer and seller actions
 
 ### Important Files
 
-- `frontend/src/integrations/supabase/client.ts` - Supabase configuration
+- `frontend/src/integrations/supabase/client.ts` - Supabase configuration (includes Realtime setup)
 - `frontend/src/contexts/AuthContext.tsx` - Authentication logic
 - `frontend/src/hooks/useCategories.ts` - Categories hook
+- `frontend/src/hooks/useMessages.ts` - Real-time messaging hook
+- `frontend/src/hooks/useConversations.ts` - Conversations list hook
+- `frontend/src/hooks/useConversation.ts` - Get/create conversation hook
+- `frontend/src/pages/Messages.tsx` - Main messaging page
 - `frontend/src/App.tsx` - Routing configuration
+
+### Messaging System Setup
+
+The messaging system uses Supabase Realtime for instant message delivery:
+
+1. **Database Tables**:
+   - `conversations`: Stores conversation metadata between two users
+   - `messages`: Stores individual messages within conversations
+
+2. **Realtime Subscriptions**:
+   - Subscribes to `INSERT` and `UPDATE` events on `messages` table
+   - Subscribes to `UPDATE` events on `conversations` table
+   - Automatically updates UI when new messages arrive
+
+3. **Row Level Security (RLS)**:
+   - Users can only access conversations they are participants in
+   - Users can only read messages from their conversations
+   - Users can only send messages to conversations they belong to
+
+4. **Features**:
+   - Real-time message delivery
+   - Unread message counts
+   - Last message preview in conversation list
+   - Auto-scroll to latest messages
+   - Message timestamps
+   - Create conversations from service pages
 
 ---
 
@@ -454,6 +538,65 @@ For issues or questions, please refer to the codebase or contact the development
 
 ---
 
-**Last Updated**: December 2024
-**Version**: 1.0.0
+---
+
+## 🆕 Recent Improvements (January 2025)
+
+### Messaging System Implementation
+- ✅ **Real-time Messaging**: Fully implemented using Supabase Realtime
+  - Instant message delivery
+  - Live conversation updates
+  - Unread message tracking
+  - Conversation list with last message preview
+  - Chat window with auto-scrolling
+  - Message timestamps
+  - Create conversations from service detail pages
+
+### Signup Flow Enhancements
+- ✅ **Conversational Signup**: Typeform-like step-by-step flow for sellers
+- ✅ **Portfolio Validation**: At least one portfolio field (description, links, or images) is now required for sellers
+- ✅ **User Type Simplification**: Removed "Both" user type option, now only "Buyer" or "Seller"
+
+### Code Quality
+- ✅ **Removed Console Logs**: All development `console.log` statements removed for production readiness
+- ✅ **Error Handling**: Improved error handling and user feedback
+
+### UI/UX Improvements
+- ✅ **Messaging UI**: Fixed scrolling issues in chat window
+- ✅ **Conversation List**: Improved visibility with proper text colors and layout
+- ✅ **Navigation**: Added messages icon with unread count badge
+
+---
+
+## 📊 Feature Status Summary
+
+### ✅ Fully Implemented & Working
+- User Authentication (Signup, Login, Email Verification)
+- Service Management (Create, Edit, View, Toggle Status)
+- Service Discovery (Browse, Filter, Search)
+- Seller Dashboard (Stats, Bookings, Payments, Profile)
+- Reviews & Ratings Display
+- **Messaging System** (Real-time chat, conversations, unread counts)
+- Conversational Signup Flow for Sellers
+- Portfolio Validation (at least one field required)
+- Dynamic Categories & Services
+- Role-based Access Control
+
+### ⚠️ Partially Implemented
+- Booking System (UI exists, needs full backend integration)
+- Payment System (Calculations done, needs gateway integration)
+- Service Images (Schema ready, upload functionality needed)
+
+### ❌ Not Yet Implemented
+- Email Notifications (removed, can be re-added)
+- Profile Picture Upload
+- Review Creation Form
+- Admin Panel
+- Advanced Search & Filtering
+- Analytics Dashboard
+
+---
+
+**Last Updated**: January 2025
+**Version**: 1.1.0
 

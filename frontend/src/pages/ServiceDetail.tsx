@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { ServiceCard } from "@/components/services/ServiceCard";
 import { useCategories } from "@/hooks/useCategories";
 import { BookingForm } from "@/components/bookings/BookingForm";
+import { useConversation } from "@/hooks/useConversation";
 
 interface Service {
   id: string;
@@ -57,6 +58,7 @@ const ServiceDetail = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { categories } = useCategories();
+  const { getOrCreateConversation, loading: conversationLoading } = useConversation();
   const [service, setService] = useState<Service | null>(null);
   const [seller, setSeller] = useState<Seller | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -355,13 +357,28 @@ const ServiceDetail = () => {
     navigate(`/booking/${bookingId}`);
   };
 
-  const handleMessageSeller = () => {
+  const handleMessageSeller = async () => {
     if (!user) {
       toast.error('Please login to message sellers');
       navigate('/login');
       return;
     }
-    toast.info('Messaging functionality coming soon!');
+
+    if (!service || !seller) {
+      toast.error('Service information not available');
+      return;
+    }
+
+    try {
+      // Get or create conversation with seller
+      const conversation = await getOrCreateConversation(seller.id, service.id);
+      
+      // Navigate to messages page with conversation ID
+      navigate(`/messages/${conversation.id}`);
+    } catch (error: any) {
+      console.error('Error creating conversation:', error);
+      toast.error(error.message || 'Failed to start conversation');
+    }
   };
 
   if (loading) {
@@ -645,9 +662,10 @@ const ServiceDetail = () => {
                       className="w-full"
                       size="lg"
                       onClick={handleMessageSeller}
+                      disabled={conversationLoading}
                     >
                       <MessageSquare className="w-5 h-5 mr-2" />
-                      Message Seller
+                      {conversationLoading ? 'Loading...' : 'Message Seller'}
                     </Button>
                   </div>
                 </div>

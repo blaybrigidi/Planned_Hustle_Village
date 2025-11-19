@@ -11,17 +11,19 @@ import { Footer } from '@/components/landing/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Link, Upload, X } from 'lucide-react';
+import { ArrowLeft, Link, Upload, X, Check } from 'lucide-react';
 import { useCategories } from '@/hooks/useCategories';
+import { ConversationalSignup } from '@/components/ConversationalSignup';
 
 const Signup = () => {
   // Step 1: Basic info
   const [step, setStep] = useState(1);
+  const [useConversational, setUseConversational] = useState(false);
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [userType, setUserType] = useState<'buyer' | 'seller' | 'both'>('buyer');
+  const [userType, setUserType] = useState<'buyer' | 'seller'>('buyer');
   
   // Step 2: Service info (only for sellers)
   const [serviceTitle, setServiceTitle] = useState('');
@@ -56,9 +58,46 @@ const Signup = () => {
     if (userType === 'buyer') {
       handleFinalSubmit();
     } else {
-      // If seller, go to step 2 to collect service info
-      setStep(2);
+      // If seller, use conversational flow
+      setUseConversational(true);
     }
+  };
+
+  const handleConversationalComplete = async (data: any) => {
+    setLoading(true);
+
+    // Map conversational form data to signup format
+    const signupData: any = {
+      email: data.email,
+      password: data.password,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phoneNumber: data.phoneNumber || undefined,
+      role: 'seller',
+      service: {
+        title: data.serviceTitle,
+        description: data.serviceDescription,
+        category: data.serviceCategory,
+        price: parseFloat(data.defaultPrice),
+        default_delivery_time: data.defaultDeliveryTime || null,
+        express_price: data.expressPrice ? parseFloat(data.expressPrice) : null,
+        express_delivery_time: data.expressDeliveryTime || null,
+        portfolio: data.portfolio || '',
+      },
+    };
+
+    // Call backend signup endpoint
+    const { error } = await signup(signupData);
+
+    setLoading(false);
+
+    if (error) {
+      toast.error(error.message || 'Failed to create account');
+      return;
+    }
+
+    // Navigate to verify email page
+    navigate('/verify-email', { state: { email: data.email } });
   };
 
   const addPortfolioLink = () => {
@@ -193,10 +232,19 @@ const Signup = () => {
     }
 
     // Validate service info if seller
-    if (userType === 'seller' || userType === 'both') {
-      const portfolioText = formatPortfolio();
-      if (!serviceTitle || !serviceDescription || !serviceCategory || !defaultPrice || !portfolioText.trim()) {
-        toast.error('Please fill in all required service fields (Title, Description, Category, Price, and Portfolio)');
+    if (userType === 'seller') {
+      // Check if at least one portfolio field is filled
+      const hasPortfolioDescription = portfolio.trim();
+      const hasPortfolioLinks = portfolioLinks.length > 0;
+      const hasPortfolioImages = portfolioImages.length > 0;
+      
+      if (!serviceTitle || !serviceDescription || !serviceCategory || !defaultPrice) {
+        toast.error('Please fill in all required service fields (Title, Description, Category, and Price)');
+        return;
+      }
+      
+      if (!hasPortfolioDescription && !hasPortfolioLinks && !hasPortfolioImages) {
+        toast.error('Please provide at least one: portfolio description, links, or images to showcase your work');
         return;
       }
 
@@ -224,11 +272,11 @@ const Signup = () => {
       firstName,
       lastName,
       phoneNumber: phoneNumber || undefined,
-      role: userType, // Send buyer, seller, or both directly
+      role: userType, // Send buyer or seller
     };
 
     // Add service data if seller (will be created after email verification)
-    if (userType === 'seller' || userType === 'both') {
+    if (userType === 'seller') {
       signupData.service = {
         title: serviceTitle,
         description: serviceDescription,
@@ -254,6 +302,36 @@ const Signup = () => {
     // Navigate to verify email page
     navigate('/verify-email', { state: { email } });
   };
+
+  // Show conversational flow for sellers
+  if (useConversational && userType === 'seller') {
+    // Pre-populate with data from step 1
+    const initialData = {
+      firstName,
+      lastName,
+      email,
+      password,
+      confirmPassword,
+      phoneNumber,
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center bg-background px-4 py-8">
+          <ConversationalSignup
+            initialData={initialData}
+            onComplete={handleConversationalComplete}
+            onCancel={() => {
+              setUseConversational(false);
+              setStep(1);
+            }}
+          />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -367,17 +445,6 @@ const Signup = () => {
                     />
                     <span className="text-sm">Offer services (Hustler)</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="userType"
-                      value="both"
-                      checked={userType === 'both'}
-                      onChange={(e) => setUserType(e.target.value as 'both')}
-                      className="w-4 h-4 text-primary"
-                    />
-                    <span className="text-sm">Both</span>
-                  </label>
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
@@ -488,7 +555,24 @@ const Signup = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Portfolio/Work Samples *</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Portfolio/Work Samples *</Label>
+                    {(() => {
+                      const hasDesc = portfolio.trim();
+                      const hasLinks = portfolioLinks.length > 0;
+                      const hasImages = portfolioImages.length > 0;
+                      const isValid = hasDesc || hasLinks || hasImages;
+                      return isValid ? (
+                        <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                          <Check className="h-3 w-3" />
+                          Requirement met
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    At least one portfolio field (description, links, or images) is required
+                  </p>
                   
                   {/* Description/Text */}
                   <div className="space-y-2">
@@ -610,9 +694,9 @@ const Signup = () => {
                   </div>
 
                   {/* Validation message */}
-                  {(portfolio.trim() || portfolioLinks.length > 0 || portfolioImages.length > 0) ? null : (
-                    <p className="text-sm text-muted-foreground">
-                      Add a description, links, or images to showcase your work
+                  {!(portfolio.trim() || portfolioLinks.length > 0 || portfolioImages.length > 0) && (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      ⚠️ Please add at least one: description, links, or images to showcase your work
                     </p>
                   )}
                 </div>

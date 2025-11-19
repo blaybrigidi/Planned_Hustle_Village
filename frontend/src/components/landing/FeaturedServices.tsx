@@ -46,7 +46,6 @@ export const FeaturedServices = () => {
 
       // If no verified services, get any active services (including null is_active)
       if (servicesError || !servicesData || servicesData.length === 0) {
-        console.log('No verified services found, fetching all active services...');
         const { data: allActiveServices, error: allActiveError } = await supabase
           .from('services')
           .select('*')
@@ -66,19 +65,6 @@ export const FeaturedServices = () => {
       }
 
       if (!servicesData || servicesData.length === 0) {
-        console.log('No services found. Checking database...');
-        // Debug: Check what services exist
-        const { data: allServices, error: debugError } = await supabase
-          .from('services')
-          .select('id, title, is_active, is_verified')
-          .limit(10);
-        
-        if (debugError) {
-          console.error('Debug query error:', debugError);
-        } else {
-          console.log('Services in database:', allServices);
-        }
-        
         setServices([]);
         return;
       }
@@ -140,7 +126,7 @@ export const FeaturedServices = () => {
         }
       } catch (error) {
         // Reviews table might not exist, use default values
-        console.log('Reviews table not available');
+        // Reviews table not available
       }
 
       // Map services to featured format

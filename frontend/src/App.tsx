@@ -24,6 +24,7 @@ import Bookings from "./pages/Bookings";
 import BookingDetail from "./pages/BookingDetail";
 import BecomeAHustler from "./pages/BecomeAHustler";
 import Profile from "./pages/Profile";
+import Messages from "./pages/Messages";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,8 @@ const App = () => (
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/become-a-hustler" element={<BecomeAHustler />} />
             <Route path="/list-service" element={<ListService />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/messages/:conversationId" element={<Messages />} />
             
             {/* ⚠️ DEVELOPMENT PREVIEW - DELETE BEFORE PRODUCTION ⚠️ */}
             <Route path="/seller-dashboard-preview" element={<SellerDashboardPreview />}>
