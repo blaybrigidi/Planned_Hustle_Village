@@ -564,7 +564,29 @@ For issues or questions, please refer to the codebase or contact the development
 ### UI/UX Improvements
 - ✅ **Messaging UI**: Fixed scrolling issues in chat window
 - ✅ **Conversation List**: Improved visibility with proper text colors and layout
+- ✅ **Active Conversation Highlight**: Selected rows now keep white typography over the green background for consistent readability.
 - ✅ **Navigation**: Added messages icon with unread count badge
+
+### Next Steps After Latest Fix
+- [ ] Verify the conversation list in both light and dark themes (hover/focus states) to ensure the new color tokens remain accessible.
+- [ ] Add Storybook examples or visual regression coverage for `ConversationList` to guard against future styling regressions.
+- [ ] Plan upcoming messaging UX polish (typing indicators, read receipts) once the base visuals are validated.
+
+### Messaging UX Polish Plan
+- **Goal**: Layer richer chat affordances (typing status, read receipts) on top of the stabilized visuals without regressing realtime performance.
+- **Typing Indicators**
+  - **Backend**: Add a `typing_status` table (conversation_id, user_id, is_typing, updated_at) with RLS mirroring `messages`. Expose lightweight RPC or Supabase Realtime channel for inserts/updates.
+  - **Frontend Hooks**: Extend `useMessages` or create `useTypingStatus` to publish `isTyping` events on keydown (debounced) and subscribe for other participants.
+  - **UI**: Render a subtle “User is typing…” row above the composer and bubble placeholder in `ChatWindow`.
+- **Read Receipts**
+  - **Database**: We already track `is_read` / `read_at`; add an index on `(conversation_id, sender_id, is_read)` for quick queries and ensure Supabase trigger updates `conversations.last_message.read_at`.
+  - **API/Hooks**: Update `useMessages` to expose `lastReadMessageId` per participant (query latest message with `is_read=true` for other user). Publish read updates via the existing UPDATE realtime channel.
+  - **UI**: 
+    - Message component: show single-check icon for sent, double-check for delivered, filled double-check when read (based on `read_at`).
+    - Conversation list: replace unread badge with “Seen • {time}” when all messages are read.
+- **Validation**
+  - Add Storybook stories demonstrating typing + read receipt states.
+  - Add cypress test that asserts read receipt icon updates after switching between accounts.
 
 ---
 
