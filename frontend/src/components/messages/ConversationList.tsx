@@ -91,17 +91,21 @@ export const ConversationList = ({ onSelectConversation }: ConversationListProps
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <div 
-                      className="font-semibold text-base truncate flex-1 min-w-0"
+                    <div
+                      className={cn(
+                        'font-semibold text-base truncate flex-1 min-w-0',
+                        isActive ? 'text-white' : 'text-foreground'
+                      )}
                       title={displayName}
-                      style={{ color: '#ffffff' }}
                     >
                       {displayName || 'Unknown User'}
                     </div>
                     {conversation.last_message && (
-                      <div 
-                        className="text-xs flex-shrink-0 whitespace-nowrap"
-                        style={{ color: '#ffffff' }}
+                      <div
+                        className={cn(
+                          'text-xs flex-shrink-0 whitespace-nowrap',
+                          isActive ? 'text-white/80' : 'text-muted-foreground'
+                        )}
                       >
                         {formatDistanceToNow(
                           new Date(conversation.last_message.created_at),
@@ -111,10 +115,12 @@ export const ConversationList = ({ onSelectConversation }: ConversationListProps
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <div 
-                      className="text-sm truncate flex-1 min-w-0"
+                    <div
+                      className={cn(
+                        'text-sm truncate flex-1 min-w-0',
+                        isActive ? 'text-white/90' : 'text-muted-foreground'
+                      )}
                       title={conversation.last_message?.content}
-                      style={{ color: '#ffffff' }}
                     >
                       {conversation.last_message?.content || 'No messages yet'}
                     </div>
