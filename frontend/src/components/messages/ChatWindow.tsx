@@ -16,13 +16,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { ServicePreview } from './ServicePreview';
-
 interface ChatWindowProps {
   conversationId: string;
   otherUserName?: string;
   otherUserAvatar?: string;
-  serviceId?: string | null; // Optional service ID from conversation
+  serviceId?: string | null; // Optional service ID from conversation (not used for links)
 }
 
 export const ChatWindow = ({
@@ -36,11 +34,8 @@ export const ChatWindow = ({
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(serviceId || null);
-  const [showServiceDialog, setShowServiceDialog] = useState(false);
-  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [linkUrl, setLinkUrl] = useState<string>('');
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,13 +46,6 @@ export const ChatWindow = ({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
-  // Update selectedServiceId when serviceId prop changes
-  useEffect(() => {
-    if (serviceId) {
-      setSelectedServiceId(serviceId);
-    }
-  }, [serviceId]);
 
   const handleImageUpload = async (files: FileList) => {
     if (!user) return;
@@ -118,55 +106,48 @@ export const ChatWindow = ({
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const searchServices = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
+  const validateUrl = (url: string): boolean => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  const handleAddLink = () => {
+    const trimmedUrl = linkUrl.trim();
+    
+    if (!trimmedUrl) {
+      toast.error('Please enter a URL');
       return;
     }
 
-    setSearching(true);
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select('id, title, description, default_price, image_urls')
-        .eq('is_active', true)
-        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
-        .limit(10);
-
-      if (error) throw error;
-      setSearchResults(data || []);
-    } catch (error: any) {
-      console.error('Error searching services:', error);
-      toast.error('Failed to search services');
-    } finally {
-      setSearching(false);
+    // Add https:// if no protocol is specified
+    let finalUrl = trimmedUrl;
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+      finalUrl = `https://${trimmedUrl}`;
     }
+
+    if (!validateUrl(finalUrl)) {
+      toast.error('Please enter a valid URL (e.g., https://example.com)');
+      return;
+    }
+
+    setLinkUrl(finalUrl);
+    setShowLinkDialog(false);
   };
 
-  const handleServiceSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setServiceSearchQuery(query);
-    searchServices(query);
-  };
-
-  const selectService = (service: any) => {
-    setSelectedServiceId(service.id);
-    setShowServiceDialog(false);
-    setServiceSearchQuery('');
-    setSearchResults([]);
-    toast.success(`Service "${service.title}" selected`);
-  };
-
-  const removeServiceLink = () => {
-    setSelectedServiceId(null);
+  const removeLink = () => {
+    setLinkUrl('');
   };
 
   const handleSend = async () => {
     if (sending) return;
 
-    // At least one of: content, attachments, or service link must be present
-    if (!input.trim() && attachments.length === 0 && !selectedServiceId) {
-      toast.error('Please add a message, image, or service link');
+    // At least one of: content, attachments, or link must be present
+    if (!input.trim() && attachments.length === 0 && !linkUrl) {
+      toast.error('Please add a message, image, or link');
       return;
     }
 
@@ -174,14 +155,15 @@ export const ChatWindow = ({
     setInput('');
 
     try {
-      await sendMessage(messageContent, attachments.length > 0 ? attachments : undefined, selectedServiceId || undefined);
+      await sendMessage(
+        messageContent, 
+        attachments.length > 0 ? attachments : undefined, 
+        linkUrl || undefined
+      );
       
-      // Clear attachments and service link after sending
+      // Clear attachments and link after sending
       setAttachments([]);
-      if (!serviceId) {
-        // Only clear if it's not the conversation's default service
-        setSelectedServiceId(null);
-      }
+      setLinkUrl('');
     } catch (error: any) {
       toast.error(error.message || 'Failed to send message');
       setInput(messageContent); // Restore input on error
@@ -272,21 +254,30 @@ export const ChatWindow = ({
           </div>
         )}
 
-        {/* Service Link Preview */}
-        {selectedServiceId && (
+        {/* Link Preview */}
+        {linkUrl && (
           <div className="mb-2">
-            <div className="relative">
-              <ServicePreview serviceId={selectedServiceId} compact={true} />
-              {!serviceId && (
+            <div className="relative p-3 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <a
+                  href={linkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 text-sm text-primary hover:underline truncate"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {linkUrl}
+                </a>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute top-2 right-2 h-6 w-6 rounded-full"
-                  onClick={removeServiceLink}
+                  className="h-6 w-6 rounded-full flex-shrink-0"
+                  onClick={removeLink}
                 >
                   <X className="h-3 w-3" />
                 </Button>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -320,13 +311,13 @@ export const ChatWindow = ({
             )}
           </Button>
 
-          {/* Service Link Button */}
+          {/* Link Button */}
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setShowServiceDialog(true)}
+            onClick={() => setShowLinkDialog(true)}
             disabled={sending}
-            title="Link a service"
+            title="Attach a link"
           >
             <LinkIcon className="h-4 w-4" />
           </Button>
@@ -346,7 +337,7 @@ export const ChatWindow = ({
           />
           <Button
             onClick={handleSend}
-            disabled={sending || uploadingImages || (!input.trim() && attachments.length === 0 && !selectedServiceId)}
+            disabled={sending || uploadingImages || (!input.trim() && attachments.length === 0 && !linkUrl)}
             size="icon"
           >
             {sending ? (
@@ -358,68 +349,35 @@ export const ChatWindow = ({
         </div>
       </div>
 
-      {/* Service Search Dialog */}
-      <Dialog open={showServiceDialog} onOpenChange={setShowServiceDialog}>
+      {/* Link URL Dialog */}
+      <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Link a Service</DialogTitle>
+            <DialogTitle>Add a Link</DialogTitle>
             <DialogDescription>
-              Search for a service to share in your message
+              Share a link to your work (Canva, website, portfolio, etc.)
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Input
-              placeholder="Search services..."
-              value={serviceSearchQuery}
-              onChange={handleServiceSearch}
+              placeholder="https://example.com or canva.com/design/..."
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddLink();
+                }
+              }}
             />
-            {searching && (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            {!searching && searchResults.length > 0 && (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {searchResults.map((service) => (
-                  <div
-                    key={service.id}
-                    className="p-3 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
-                    onClick={() => selectService(service)}
-                  >
-                    <div className="flex gap-3">
-                      {service.image_urls && service.image_urls.length > 0 && (
-                        <img
-                          src={service.image_urls[0]}
-                          alt={service.title}
-                          className="w-16 h-16 object-cover rounded"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-sm line-clamp-1">{service.title}</h4>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                          {service.description}
-                        </p>
-                        {service.default_price && (
-                          <p className="text-sm font-bold text-primary mt-1">
-                            GH₵ {service.default_price}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {!searching && serviceSearchQuery && searchResults.length === 0 && (
-              <div className="text-center py-4 text-muted-foreground">
-                No services found
-              </div>
-            )}
-            {!serviceSearchQuery && (
-              <div className="text-center py-4 text-muted-foreground">
-                Start typing to search for services
-              </div>
-            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowLinkDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddLink} disabled={!linkUrl.trim()}>
+                Add Link
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

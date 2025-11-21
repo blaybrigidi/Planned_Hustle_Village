@@ -12,7 +12,7 @@ export interface Message {
   read_at: string | null;
   created_at: string;
   attachments?: string[] | null; // Array of image URLs
-  service_id?: string | null; // Optional service/product link
+  link_url?: string | null; // Optional external URL link (Canva, websites, etc.)
 }
 
 export interface Conversation {
@@ -151,15 +151,15 @@ export const useMessages = (conversationId: string | null) => {
     async (
       content: string,
       attachments?: string[],
-      serviceId?: string | null
+      linkUrl?: string | null
     ) => {
       if (!conversationId || !user) {
         throw new Error('Missing required data');
       }
 
-      // At least content, attachments, or serviceId must be provided
-      if (!content.trim() && (!attachments || attachments.length === 0) && !serviceId) {
-        throw new Error('Message must have content, attachments, or a service link');
+      // At least content, attachments, or linkUrl must be provided
+      if (!content.trim() && (!attachments || attachments.length === 0) && !linkUrl) {
+        throw new Error('Message must have content, attachments, or a link');
       }
 
       setSending(true);
@@ -175,9 +175,9 @@ export const useMessages = (conversationId: string | null) => {
           messageData.attachments = attachments;
         }
 
-        // Add service_id if provided
-        if (serviceId) {
-          messageData.service_id = serviceId;
+        // Add link_url if provided
+        if (linkUrl && linkUrl.trim()) {
+          messageData.link_url = linkUrl.trim();
         }
 
         const { data, error } = await supabase
