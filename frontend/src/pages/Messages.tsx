@@ -62,6 +62,7 @@ const Messages = () => {
                     conversationId={conversationId}
                     otherUserName={getOtherUserName()}
                     otherUserAvatar={activeConversation.other_user?.profile_pic || undefined}
+                    serviceId={activeConversation.service_id || undefined}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-center p-8">

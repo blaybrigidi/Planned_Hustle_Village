@@ -11,6 +11,8 @@ export interface Message {
   is_read: boolean;
   read_at: string | null;
   created_at: string;
+  attachments?: string[] | null; // Array of image URLs
+  service_id?: string | null; // Optional service/product link
 }
 
 export interface Conversation {
@@ -146,20 +148,41 @@ export const useMessages = (conversationId: string | null) => {
 
   // Send message
   const sendMessage = useCallback(
-    async (content: string) => {
-      if (!conversationId || !user || !content.trim()) {
+    async (
+      content: string,
+      attachments?: string[],
+      serviceId?: string | null
+    ) => {
+      if (!conversationId || !user) {
         throw new Error('Missing required data');
+      }
+
+      // At least content, attachments, or serviceId must be provided
+      if (!content.trim() && (!attachments || attachments.length === 0) && !serviceId) {
+        throw new Error('Message must have content, attachments, or a service link');
       }
 
       setSending(true);
       try {
+        const messageData: any = {
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: content.trim() || '',
+        };
+
+        // Add attachments if provided
+        if (attachments && attachments.length > 0) {
+          messageData.attachments = attachments;
+        }
+
+        // Add service_id if provided
+        if (serviceId) {
+          messageData.service_id = serviceId;
+        }
+
         const { data, error } = await supabase
           .from('messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: user.id,
-            content: content.trim(),
-          })
+          .insert(messageData)
           .select()
           .single();
 
